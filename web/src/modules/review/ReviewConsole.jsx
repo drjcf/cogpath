@@ -25,13 +25,13 @@ function ClaimCard({ c, focused, onFocus, onDecide, vocab, busy, mode, setMode }
       <div className="claim-head">
         <span className="claim-id">{c.id}</span>
         <Badge kind="type">{c.type}</Badge>
-        <Badge kind="attr" title="this_work: the source's own finding · cited_work: reported from another study">{c.attribution}</Badge>
-        <Badge kind="sec">{c.section}{c.page != null ? ` · p.${c.page}` : ''}</Badge>
+        <Badge kind="attr" title="this_work: the article's own finding; cited_work: reported from another study; general_knowledge: stated as background">{c.attribution.replace('_', ' ')}</Badge>
+        <Badge kind="sec">{c.section.replace(/_/g, ' ')}{c.page != null ? `, page ${c.page}` : ''}</Badge>
         {st !== 'pending' && <Badge kind={st}>{st}{c.decision?.edited ? ' (edited)' : ''}</Badge>}
       </div>
       <div className="claim-statement">{c.statement}</div>
       <div className="span" onClick={(e) => { e.stopPropagation(); onFocus(c.id); }} title="locate in the source">
-        <label>Source span · click to locate</label>
+        <label>In the article (click to locate)</label>
         <blockquote>{c.span}</blockquote>
       </div>
       {c.decision?.reason ? <div className="claim-reason">Reason: {c.decision.reason}</div> : null}
@@ -161,8 +161,8 @@ export default function ReviewConsole({ sha, onBack }) {
   return (
     <div className="certifypage">
       <header className="topbar">
-        <button className="link" onClick={onBack}>← Sources</button>
-        <div className="title"><strong>{data.title}</strong> <span className="muted">{data.short} · {data.kind} · {data.words} words{data.mock ? ' · MOCK' : ''}</span></div>
+        <button className="link back" onClick={onBack}>Sources</button>
+        <div className="title"><strong>{data.title}</strong> <span className="muted">{data.words} words, {data.claims.length} claims{data.mock ? ', mock' : ''}</span></div>
         <div className="counts">
           <Badge kind="pending">{counts.pending} pending</Badge>
           <Badge kind="certified">{counts.certified} certified</Badge>
@@ -178,11 +178,11 @@ export default function ReviewConsole({ sha, onBack }) {
         </div>
       </header>
       {error ? <div className="error bar">{error}</div> : null}
-      {data.status === 'approved' && data.review?.at ? <div className="info bar">Approved by {data.review.by || 'unknown'} on {new Date(data.review.at).toLocaleString()}{data.review.note ? ` · ${data.review.note}` : ''}. Decisions on an approved digest demote it to "modified" until approved again.</div> : null}
+      {data.status === 'approved' && data.review?.at ? <div className="info bar">Approved by {data.review.by || 'unknown'} on {new Date(data.review.at).toLocaleString()}{data.review.note ? ` (note: ${data.review.note})` : ''}. A decision on an approved set demotes it to "modified" until it is approved again.</div> : null}
       <div className="body">
         <section className="claims">
           <div className="toolbar">
-            <span className="muted">Keys: J certify · F reject · E edit · S/↓ next · ↑ prev</span>
+            <span className="muted">Keys: J certify, F reject, E edit, S or ↓ next, ↑ previous</span>
             <select value={filter} onChange={(e) => setFilter(e.target.value)}>
               <option value="all">all</option><option value="pending">pending</option><option value="certified">certified</option><option value="rejected">rejected</option>
             </select>

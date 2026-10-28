@@ -1,6 +1,6 @@
 {
   "name": "cogpath",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Compile assessment items from a cognitive path: the model executes recall > analyze > evaluate > synthesize over a source, then assembles an item whose distractors are failures at specific steps, and verifies that the full path is necessary to reach the key.",
   "type": "module",

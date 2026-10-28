@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
   await page.click('form.upload button[type=submit]');
   await page.waitForSelector('tr.st-draft', { timeout: 90000 });
   await shot('flow-sources');
-  const statusText = await page.locator('tr.st-draft .badge').first().textContent();
+  const statusText = await page.locator('tr.st-draft .tag').first().textContent();
 
   await page.locator('tr.st-draft button', { hasText: 'Review' }).first().click();
   await page.waitForSelector('.claim');

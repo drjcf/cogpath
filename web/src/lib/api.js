@@ -26,6 +26,10 @@ export const api = {
   build: (id) => req(`/builds/${id}`),
   buildEvents: (id, after = '') => req(`/builds/${id}/events${after ? `?after=${encodeURIComponent(after)}` : ''}`),
   createBuild: (body) => req('/builds', { method: 'POST', body: JSON.stringify(body) }),
+  decideItem: (id, itemId, body) => req(`/builds/${id}/items/${itemId}/decide`, { method: 'POST', body: JSON.stringify(body) }),
+  items: (status = 'certified') => req(`/items?status=${status}`),
+  ops: () => req('/ops'),
+  checkPaths: (paths) => req('/paths/check', { method: 'POST', body: JSON.stringify({ paths }) }),
   job: (id) => req(`/jobs/${id}`),
   jobs: () => req('/jobs'),
   /** PDF bytes for the viewer (fetched, not referenced by URL, so the identity header travels with it). */

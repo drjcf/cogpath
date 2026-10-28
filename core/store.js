@@ -314,6 +314,12 @@ export async function listBuilds(summarize) {
     const rec = await b.readBuildRecord(id);
     if (rec) summaries.push(buildSummary(rec, summarize));
   }
+  // A summary without rates (progress-only, or review-only on an older record) is completed from its record when one exists.
+  for (const [i, s] of summaries.entries()) {
+    if (s.rates || ['queued', 'launched', 'running'].includes(s.status)) continue;
+    const rec = await b.readBuildRecord(s.id);
+    if (rec) summaries[i] = { ...buildSummary(rec, summarize), ...Object.fromEntries(Object.entries(s).filter(([k]) => ['review', 'record', 'updatedAt'].includes(k))) };
+  }
   return summaries.sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)));
 }
 
@@ -346,7 +352,10 @@ export async function decideItem(buildId, itemId, { action, reason = '', by = ''
   else decisions[itemId] = { status: action === 'certify' ? 'certified' : 'rejected', reason, by, at: new Date().toISOString() };
   await b.writeBuildDecisions(buildId, decisions);
   const review = itemReviewCounts(build, decisions);
-  await updateBuildSummary(buildId, { review });
+  // The summary may not exist for a record written by an older CLI; rebuild it from the record so the listing stays complete.
+  const existing = await b.readBuildSummary(buildId);
+  if (!existing?.rates) { const { summarize } = await import('./build.js'); await updateBuildSummary(buildId, { ...buildSummary(build, summarize), review }); }
+  else await updateBuildSummary(buildId, { review });
   return { decision: decisions[itemId] ?? { status: 'pending' }, review };
 }
 
