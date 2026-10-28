@@ -2,7 +2,7 @@
 # cogpath on GCP: Firestore (named database) + Cloud Storage + Cloud Run service (API) + Cloud Run Job (worker)
 # + Firebase Hosting (console). Idempotent: every step skips what already exists.
 #
-#   PROJECT=edai-demos REGION=us-central1 ./deploy/deploy.sh            # everything
+#   PROJECT=edai-prep REGION=us-central1 ./deploy/deploy.sh            # everything
 #   ./deploy/deploy.sh image|service|job|hosting                        # one step
 #
 # Before the first run:
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PROJECT="${PROJECT:-edai-demos}"
+PROJECT="${PROJECT:-edai-prep}"
 REGION="${REGION:-us-central1}"
 FIRESTORE_LOCATION="${FIRESTORE_LOCATION:-nam5}"
 DB="${DB:-cogpath}"
