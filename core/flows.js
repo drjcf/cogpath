@@ -41,7 +41,8 @@ export async function ingestFlow({ source, model, maxClaims, audit = true, log =
  * Build N items (and controls) and store the record. `onEvent` receives the build events; the summary in the
  * store is patched as items finish so a console can follow a build that is still running.
  */
-export async function buildFlow({ source, n, pathHint, model, deep, baseline, seed, id, by, jobId, onEvent }) {
+export async function buildFlow({ source, n, paths, pathHint, model, deep, baseline, seed, id, by, jobId, onEvent }) {
+  if (!paths?.length && pathHint) paths = [pathHint];
   let itemsDone = 0;
   let currentItem = null;
   const progress = async (patch) => { try { await updateBuildSummary(id, patch); } catch { /* progress is best-effort */ } };
@@ -55,8 +56,8 @@ export async function buildFlow({ source, n, pathHint, model, deep, baseline, se
     if (e.type === 'item:done') { itemsDone++; await progress({ progress: { phase: 'item-done', item: e.plan.id, itemsDone, of: n, pass: e.verification ? `${e.verification.summary.passed}/${e.verification.summary.applicable}` : e.status, at: new Date().toISOString() } }); }
     if (e.type === 'baseline:start') await progress({ progress: { phase: 'control', item: e.plan.id, itemsDone, of: n, at: new Date().toISOString() } });
   };
-  if (id) await progress({ id, status: 'running', phase: 'plan', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, claims: source.digest?.claims?.length ?? 0, mode: source.mode, digestReview: source.digestReview ?? null }, n, deep, pathHint: pathHint ?? null, by: by ?? null, jobId: jobId ?? null, progress: { phase: 'plan', itemsDone: 0, of: n, at: new Date().toISOString() } });
-  const result = await buildItems({ source, n, pathHint, model, deep, baseline, seed, id, onEvent: wrapped });
+  if (id) await progress({ id, status: 'running', phase: 'plan', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, claims: source.digest?.claims?.length ?? 0, mode: source.mode, digestReview: source.digestReview ?? null }, n, deep, pathHint: paths?.[0] ?? null, paths: paths ?? null, pathMode: paths?.length ? 'composed' : 'planner', by: by ?? null, jobId: jobId ?? null, progress: { phase: 'plan', itemsDone: 0, of: n, at: new Date().toISOString() } });
+  const result = await buildItems({ source, n, paths, model, deep, baseline, seed, id, onEvent: wrapped });
   result.by = by ?? null; result.jobId = jobId ?? null; result.finishedAt = new Date().toISOString();
   const saved = await saveBuild(result, summarize);
   return { result, ...saved };

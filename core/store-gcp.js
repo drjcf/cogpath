@@ -103,6 +103,8 @@ export async function listBuildSummaries() {
   return snap.docs.map((d) => d.data());
 }
 export async function listBuildIds() { return (await listBlobs('builds/')).filter((k) => /^builds\/build-[a-z0-9-]+\.json$/i.test(k)).map((k) => k.slice('builds/'.length, -'.json'.length)); }
+export const readBuildDecisions = async (id) => (await docData(buildRef(id).collection('data').doc('decisions')))?.decisions ?? {};
+export const writeBuildDecisions = async (id, decisions) => { await buildRef(id).collection('data').doc('decisions').set({ decisions, updatedAt: new Date().toISOString() }); };
 let eventSeq = 0;
 export async function appendBuildEvent(id, event) {
   const seq = `${String(Date.now()).padStart(14, '0')}-${String(eventSeq++ % 10000).padStart(4, '0')}`;

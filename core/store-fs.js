@@ -68,6 +68,8 @@ export async function listBuildIds() {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter((f) => /^build-[a-z0-9-]+\.json$/i.test(f)).map((f) => f.replace(/\.json$/, ''));
 }
+export const readBuildDecisions = async (id) => readJson(path.join(buildsDir(), `${id}.decisions.json`), {});
+export const writeBuildDecisions = async (id, d) => writeJson(path.join(buildsDir(), `${id}.decisions.json`), d);
 export async function appendBuildEvent(id, event) {
   const f = path.join(buildsDir(), `${id}.events.json`);
   const events = readJson(f, []);

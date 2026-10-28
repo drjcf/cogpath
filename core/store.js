@@ -272,7 +272,7 @@ export async function saveRun(trace, opts) { return (await store()).saveRun(trac
 export function buildSummary(build, summarize) {
   const s = summarize(build);
   return {
-    id: build.id, status: build.status, createdAt: build.createdAt, finishedAt: build.finishedAt ?? null, model: build.model, source: build.source, n: build.n, deep: build.deep, pathHint: build.pathHint ?? null,
+    id: build.id, status: build.status, createdAt: build.createdAt, finishedAt: build.finishedAt ?? null, model: build.model, source: build.source, n: build.n, deep: build.deep, pathHint: build.pathHint ?? null, paths: build.paths ?? null, pathMode: build.pathMode ?? (build.pathHint ? 'composed' : 'planner'),
     baselines: build.baselines?.length ?? 0, rates: s.rates, totals: build.totals, error: build.error ?? null, by: build.by ?? null, jobId: build.jobId ?? null,
     items: s.rows.map((r) => ({ id: r.id, status: r.status, pass: r.pass, necessity: r.necessity, digestRecall: r.digestRecall, focus: r.focus, path: r.path })),
     progress: build.progress ?? null, rescored: build.rescored?.length ?? 0,
@@ -318,6 +318,74 @@ export async function listBuilds(summarize) {
 }
 
 export async function appendBuildEvent(id, event) { return (await store()).appendBuildEvent(id, { at: new Date().toISOString(), ...event }); }
+
+// ── item review ──
+
+export const ITEM_ACTIONS = ['certify', 'reject', 'clear'];
+
+/** Reviewer decisions on a build's items: { [itemId]: { status: certified | rejected, reason, by, at } }. */
+export async function loadBuildDecisions(id) { return (await store()).readBuildDecisions(id); }
+
+export function itemReviewCounts(build, decisions) {
+  const counts = { pending: 0, certified: 0, rejected: 0, total: 0 };
+  for (const it of build.items ?? []) { if (it.status !== 'done') continue; counts.total++; counts[decisions[it.plan.id]?.status ?? 'pending']++; }
+  return counts;
+}
+
+/** Record a decision on one built item and keep the build summary's review counts current. */
+export async function decideItem(buildId, itemId, { action, reason = '', by = '' } = {}) {
+  const b = await store();
+  if (!ITEM_ACTIONS.includes(action)) throw new Error(`action must be certify, reject, or clear (got ${action})`);
+  const build = await loadBuild(buildId);
+  if (!build) throw new Error(`unknown build ${buildId}`);
+  const item = build.items.find((it) => it.plan.id === itemId);
+  if (!item) throw new Error(`unknown item ${itemId}`);
+  if (item.status !== 'done') throw new Error(`item ${itemId} was not built (${item.status})`);
+  const decisions = await b.readBuildDecisions(buildId);
+  if (action === 'clear') delete decisions[itemId];
+  else decisions[itemId] = { status: action === 'certify' ? 'certified' : 'rejected', reason, by, at: new Date().toISOString() };
+  await b.writeBuildDecisions(buildId, decisions);
+  const review = itemReviewCounts(build, decisions);
+  await updateBuildSummary(buildId, { review });
+  return { decision: decisions[itemId] ?? { status: 'pending' }, review };
+}
+
+/** A built item in the shape an item bank wants: text, lettered options with the step each distractor fails at, explanation, provenance. */
+export function exportItem(build, rec, decision) {
+  const item = rec.trace.item;
+  const v = rec.verification;
+  return {
+    id: `${build.id}/${rec.plan.id}`, build: build.id, item: rec.plan.id,
+    source: { title: build.source?.title ?? null, sha: build.source?.sha ?? null, claims: rec.plan.claims ?? [] },
+    focus: rec.plan.focus, path: rec.plan.path, model: build.model,
+    stem: item.stem, leadIn: item.leadIn,
+    options: item.options.map((o) => ({ letter: o.id, text: o.text, key: Boolean(o.isKey), failsAt: o.failsAt === 'none' ? null : o.failsAt, rationale: o.failureRationale ?? null })),
+    key: item.key,
+    explanation: item.explanation ?? null,
+    verification: v ? { passed: v.summary.passed, applicable: v.summary.applicable, pass: v.summary.pass, necessity: v.pathNecessity?.determinedAt ?? null, pathLength: v.pathNecessity?.pathLength ?? null, digestRecall: v.digestRecall?.skipped ? null : v.digestRecall?.pass ?? null, sourceRecall: v.sourceRecall?.skipped ? null : v.sourceRecall?.pass ?? null, cover: v.coverTheOptions?.pass ?? null, keyBlocked: v.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : null } : null,
+    decision: decision ?? { status: 'pending' },
+    builtAt: rec.trace.createdAt ?? build.createdAt, by: build.by ?? null,
+  };
+}
+
+/** Items of one build (status: certified | rejected | pending | all). */
+export async function exportBuild(buildId, { status = 'certified' } = {}) {
+  const build = await loadBuild(buildId);
+  if (!build) throw new Error(`unknown build ${buildId}`);
+  const decisions = await loadBuildDecisions(buildId);
+  return build.items.filter((it) => it.status === 'done').map((it) => exportItem(build, it, decisions[it.plan.id])).filter((x) => status === 'all' || x.decision.status === status);
+}
+
+/** Items across every build (the item bank). */
+export async function exportAll(summarize, { status = 'certified' } = {}) {
+  const out = [];
+  for (const s of await listBuilds(summarize)) {
+    if (status === 'certified' && !(s.review?.certified > 0)) continue;
+    if (!['done', 'partial'].includes(s.status)) continue;
+    try { out.push(...(await exportBuild(s.id, { status }))); } catch { /* a summary without a record */ }
+  }
+  return out;
+}
 export async function listBuildEvents(id, opts) { return (await store()).readBuildEvents(id, opts); }
 
 // ── Files API cache (PDF uploads to the model provider) ──

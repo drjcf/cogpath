@@ -57,8 +57,9 @@ async function runIngest(job) {
 }
 
 async function runBuild(job) {
-  const { sha, items = 5, path: pathHint = null, deep = true, baseline = true, seed, model = DEFAULT_MODEL, buildId, allowDraft = false } = job.params;
-  if (pathHint) parsePath(pathHint);
+  const { sha, items = 5, path: pathHint = null, paths = null, deep = true, baseline = true, seed, model = DEFAULT_MODEL, buildId, allowDraft = false } = job.params;
+  const composed = paths?.length ? paths : pathHint ? [pathHint] : null;
+  for (const p of composed ?? []) parsePath(p);
   const ing = await loadIngest(sha);
   if (!ing) throw new Error(`not ingested: ${shortSha(sha)}`);
   if (ing.stale) throw new Error('stale digest: re-ingest first');
@@ -67,7 +68,7 @@ async function runBuild(job) {
   const source = { ...withDigest(raw, ing.digest, 'digest'), digestReview: ing.status };
   const onEvent = (e) => { const s = slim(e); if (s) appendBuildEvent(buildId, s).catch((err) => log('event write failed', err.message)); };
   try {
-    const { result } = await buildFlow({ source, n: Number(items), pathHint, model, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed != null ? Number(seed) : undefined, id: buildId, by: job.by, jobId: job.id, onEvent });
+    const { result } = await buildFlow({ source, n: Number(items), paths: composed, model, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed != null ? Number(seed) : undefined, id: buildId, by: job.by, jobId: job.id, onEvent });
     return { buildId, status: result.status, items: result.items.length };
   } catch (e) {
     await updateBuildSummary(buildId, { status: 'failed', error: { message: e.message }, finishedAt: new Date().toISOString() });

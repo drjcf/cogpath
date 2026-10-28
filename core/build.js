@@ -26,13 +26,14 @@ export function coverageMap(digest, items) {
   return { perItem: Object.fromEntries(used), unused: [...all].filter((id) => !touched.has(id)), usedCount: touched.size, total: all.size, byType };
 }
 
-export async function buildItems({ source, n, pathHint, model, deep = false, baseline = false, seed, id: givenId, onEvent }) {
+export async function buildItems({ source, n, paths, pathHint, model, deep = false, baseline = false, seed, id: givenId, onEvent }) {
   const id = givenId ?? newId('build');
   const t0 = Date.now();
-  const build = { id, status: 'running', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, mode: source.mode, claims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null }, n, pathHint: pathHint ?? null, deep, plan: null, items: [], baselines: [], coverage: null, totals: null, error: null };
+  if (!paths?.length && pathHint) paths = [pathHint];
+  const build = { id, status: 'running', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, mode: source.mode, claims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null }, n, pathHint: paths?.[0] ?? null, paths: paths ?? null, pathMode: paths?.length ? 'composed' : 'planner', deep, plan: null, items: [], baselines: [], coverage: null, totals: null, error: null };
   try {
     onEvent?.({ type: 'plan:start', n });
-    const plan = await planItems({ source, n, pathHint, model });
+    const plan = await planItems({ source, n, paths, model });
     build.plan = { plans: plan.plans.map(({ steps, ...p }) => p), usage: plan.usage, ms: plan.ms, attempts: plan.attempts, reasoningSummary: plan.reasoningSummary };
     onEvent?.({ type: 'plan:done', plans: plan.plans, usage: plan.usage, ms: plan.ms });
 
