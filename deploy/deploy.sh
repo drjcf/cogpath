@@ -7,11 +7,11 @@
 #
 # Before the first run:
 #   1. gcloud auth login && firebase login --no-localhost
-#   2. The model key as a secret (typed, never in a shell history line):
-#        read -rs MODEL_API_KEY && printf '%s' "$MODEL_API_KEY" | gcloud secrets create MODEL_API_KEY --project "$PROJECT" --data-file=-
+#   2. The model key as a secret (typed at a prompt, never in a shell history line; `setup` creates the secret, this adds the value):
+#        read -rsp 'MODEL_API_KEY: ' MODEL_API_KEY; echo; printf '%s' "$MODEL_API_KEY" | gcloud secrets versions add MODEL_API_KEY --project "$PROJECT" --data-file=-
 #   3. Firebase Authentication: enable the Google provider in the Firebase console (Build > Authentication > Sign-in method)
-#      and put the web app config in deploy/firebase-web-config.json (Project settings > Your apps > SDK setup and configuration,
-#      or: firebase apps:sdkconfig web --project "$PROJECT").
+#      and save the web app config:  firebase apps:create web cogpath --project "$PROJECT"
+#                                     firebase apps:sdkconfig web --project "$PROJECT" | node deploy/web-config.mjs
 #   4. ALLOWLIST: comma-separated emails that may upload, review, approve and build. Others can read everything.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -45,7 +45,13 @@ setup() {
   gcloud storage buckets describe "gs://${BUCKET}" >/dev/null 2>&1 || gcloud storage buckets create "gs://${BUCKET}" --location=US --uniform-bucket-level-access
 
   say "secret MODEL_API_KEY"
-  gcloud secrets describe MODEL_API_KEY >/dev/null 2>&1 || { echo "create it first: read -rs MODEL_API_KEY && printf '%s' \"\$MODEL_API_KEY\" | gcloud secrets create MODEL_API_KEY --data-file=-"; exit 1; }
+  gcloud secrets describe MODEL_API_KEY >/dev/null 2>&1 || gcloud secrets create MODEL_API_KEY --replication-policy=automatic >/dev/null
+  # A secret with no enabled version (an empty paste) deploys a service that cannot start.
+  if ! gcloud secrets versions list MODEL_API_KEY --filter="state:enabled" --format="value(name)" | grep -q .; then
+    echo "MODEL_API_KEY has no enabled version. Add one (the key is typed, not echoed):"
+    echo "  read -rsp 'MODEL_API_KEY: ' MODEL_API_KEY; echo; printf '%s' \"\$MODEL_API_KEY\" | gcloud secrets versions add MODEL_API_KEY --project $PROJECT --data-file=-"
+    exit 1
+  fi
 
   say "service account ${SA}"
   gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 || gcloud iam service-accounts create "$SA_NAME" --display-name="cogpath API and worker"
@@ -97,6 +103,7 @@ job() {
 
 hosting() {
   say "Firebase Hosting (console)"
+  [ -f "$WEB_CONFIG_FILE" ] || echo "note: $WEB_CONFIG_FILE is missing, so the deployed console has no sign-in (reads only). Create it and re-run: ./deploy/deploy.sh service && ./deploy/deploy.sh hosting"
   npm run build:web
   firebase deploy --only hosting --project "$PROJECT" --non-interactive
   echo "Authorize the hosting domain for sign-in if not done: Firebase console > Authentication > Settings > Authorized domains"

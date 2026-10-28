@@ -122,12 +122,13 @@ The same code runs in two shapes. Locally, `COGPATH_STORE=fs` keeps everything u
 
 ```bash
 gcloud auth login && firebase login --no-localhost
-# the model key as a secret, typed rather than pasted into a command line
-read -rs MODEL_API_KEY && printf '%s' "$MODEL_API_KEY" | gcloud secrets create MODEL_API_KEY --project edai-prep --data-file=-
-# Firebase: enable the Google sign-in provider (console > Authentication > Sign-in method), register a web app, and save its config
+PROJECT=edai-prep ./deploy/deploy.sh setup                       # database, bucket, secret (empty), service account, registry
+# the model key, typed at a prompt rather than pasted into a command line
+read -rsp 'MODEL_API_KEY: ' MODEL_API_KEY; echo; printf '%s' "$MODEL_API_KEY" | gcloud secrets versions add MODEL_API_KEY --project edai-prep --data-file=-
+# Firebase: enable the Google sign-in provider (console > Authentication > Sign-in method), register a web app, save its config
 firebase apps:create web cogpath --project edai-prep
-firebase apps:sdkconfig web --project edai-prep > deploy/firebase-web-config.json   # trim to the JSON object if the CLI wraps it
-PROJECT=edai-prep REGION=us-central1 ALLOWLIST=you@example.com ./deploy/deploy.sh   # setup, image, service, job, hosting
+firebase apps:sdkconfig web --project edai-prep | node deploy/web-config.mjs
+PROJECT=edai-prep ALLOWLIST=you@example.com ./deploy/deploy.sh   # image, service, job, hosting (setup is re-checked, idempotent)
 ```
 
 `deploy/deploy.sh` is idempotent and takes a single step as its argument (`setup`, `image`, `service`, `job`, `hosting`). It creates the Firestore database `cogpath` in `nam5`, the bucket `<project>-cogpath`, a service account with Firestore, Storage, Secret Manager and Cloud Run Job permissions, builds one image with Cloud Build, deploys it as the service `cogpath-api` and the job `cogpath-worker` (three-hour task timeout: a five-item build with controls and deep verification is about 30 minutes), then builds and deploys the console. After the first deploy, add the hosting domain to Authentication > Settings > Authorized domains.
