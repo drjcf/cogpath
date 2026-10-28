@@ -1,0 +1,8 @@
+node_modules/
+.env
+runs/
+*.log
+web/node_modules/
+deploy/firebase-web-config.json
+deploy/.last-image
+web/dist/

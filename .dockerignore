@@ -1,0 +1,12 @@
+node_modules
+web/node_modules
+web/dist
+runs
+.env
+*.log
+.git
+test
+docs
+samples
+articles
+*.pdf

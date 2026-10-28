@@ -1,0 +1,9 @@
+node_modules
+web/node_modules
+web/dist
+runs
+.env
+*.log
+.git
+*.pdf
+articles

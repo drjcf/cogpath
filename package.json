@@ -1,0 +1,39 @@
+{
+  "name": "cogpath",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Compile assessment items from a cognitive path: the model executes recall > analyze > evaluate > synthesize over a source, then assembles an item whose distractors are failures at specific steps, and verifies that the full path is necessary to reach the key.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "cogpath": "./cli.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "run": "node cli.js run",
+    "ops": "node cli.js ops",
+    "serve": "node server/index.js",
+    "web": "npm --prefix web run dev",
+    "build:web": "npm --prefix web run build",
+    "postinstall": "npm --prefix web install --no-audit --no-fund",
+    "deploy": "./deploy/deploy.sh",
+    "worker": "node worker/index.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^9.4.0",
+    "@google-cloud/run": "^4.2.0",
+    "@google-cloud/storage": "^8.4.0",
+    "ajv": "^8.17.1",
+    "busboy": "^1.6.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.3.0",
+    "firebase-admin": "^14.5.0",
+    "openai": "^7.43.0",
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "@firestore-emulator/server": "^0.3.15"
+  }
+}
