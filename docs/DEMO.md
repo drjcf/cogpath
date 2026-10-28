@@ -1,49 +1,49 @@
-# Demo script (about 3 minutes)
+# Demo script (about 3 minutes, on the live app)
 
-Record the browser at 1400 wide. Server running (`npm run serve`), builds and sources already in `runs/`. Suggested build: `mvrvace5` (GCA arterial lesions, 0.5.1); suggested item: item4 (full pass, necessity k4, cover pass with a stem constraint the free answerer had to honor).
+Record the browser at 1400 wide on https://edai-prep-25580.web.app, signed in, with the Oct 28 GCA build (41 claims) open in a second tab. Items 1 and 2 of that build are full passes; item 1 is the one to walk through. Navigation only on camera: no decisions, no approvals, no launches.
 
-## 0:00 The claim (voice over the builds list, `#/builds`)
+## 0:00 The claim (home page)
 
 "A model asked for a question that requires analysis and synthesis writes one whose answer the article already states. cogpath makes the model execute the reasoning instead, one typed step at a time, and then tries to prove the question needs every step."
 
-Point at the two digestRecall columns: path 19 of 20 keys not stated by the source; single-shot 6 of 20.
+Change one thing in the composer on camera: pick the Evidence appraisal preset, then switch the analysis kind to mechanism. The glyph and the grammar text follow. "The path is the design. You compose it, or the planner designs one per item."
 
-## 0:30 One article, once (`#/sources`, then Review on the GCA source)
+Scroll to the numbers at the foot: "Across the builds so far, 29 of 30 path keys are not something the article already states. For single-shot items, 7 of 25."
 
-Click two claims. The span highlights in the PDF. "Every claim is a verbatim span, located in the PDF, audited by a second pass, and certified by a person before any item is built on it."
+## 0:40 The article becomes claims (Sources, then Review on the GCA article)
 
-Move between claims with `S` and `↑` (navigation only). Do not certify, reject, edit or approve anything on camera.
+Click two claims. The span highlights in the PDF. "Every claim is a verbatim span, located in the PDF, audited by a second reader, and certified by a person before any item is built on it."
 
-## 1:00 The item (`#/builds/<mvrvace5 id>`, item4, item tab)
+Move between claims with `S` and `↑`. Point at the approved tag and the reviewer of record.
 
-Read the path line: `recall(4) > analyze(mechanism) > evaluate(accuracy, harm) > synthesize(interpretation guide)`.
+## 1:10 The item (Builds, the GCA build, item 1, Item tab)
 
-Read the case constraint box: stage 4 kidney disease, eGFR 22, occlusion on MRA where CTA was patent. "The source does not cover this patient. The synthesize step had to adapt."
+Read the glyph: Recall 4, Analyze, Evaluate benefit and burden, Synthesize counseling plan.
 
-Point at the option tags: fails at recall, fails at analyze, fails at evaluate, fails at synthesize. "Each wrong answer is what a learner who failed at that step would choose."
+Read the case box. "The article does not cover this patient. The synthesize step had to adapt."
 
-## 1:40 The proof (verification tab)
+Point at the option tags: fails at Recall, fails at Analyze, fails at Evaluate, fails at Synthesize. "Each wrong answer is what a learner who failed at that step would choose."
 
-pathNecessity: click k2, then k3, then k4. "With the facts and the relations only, the picker cannot determine the key. With the evaluation, still not. With the synthesis, it can, and here is the quoted evidence for each clause, re-checked locally."
+## 1:40 How the answer was made (second tab)
 
-distractorMapping: "Corrupt any one step, re-run the rest without the source, and the key is unreachable: 4 of 4."
+Scroll once through the four steps. "These are the artifacts the model left behind: the facts with their spans, the relations with the misreading each invites, the strategies scored against the criteria, the plan adapted to the case. Nothing here is generated for display."
 
-coverTheOptions: open the free answer. "Asked to answer from the article with no options, bound by the scenario, the model lands on the key."
+## 2:10 What the verifier found (third tab)
 
-## 2:20 The control (single-shot tab)
+Click the necessity buttons in order: no notes, steps 1 to 1, 1 to 2, 1 to 3, 1 to 4. "With the facts only, the picker cannot determine the key. With the relations, still not. With the evaluation, still not. With the synthesis, it can, and here is the quoted evidence for each clause, re-checked by the verifier."
 
-"Same focus, same digest, one call, asked for an item requiring all four cognitive levels." Point at its digestRecall FAIL where present (item1, item2 or item5 of this build): "its key is a sentence from the article."
+Point at the corruption list: "Corrupt any one step, re-run the rest without the article, and the key is unreachable: four of four."
 
-## 2:40 What it costs and what it does not do
+## 2:40 The control and the bank (fourth tab, then Items)
 
-Builds list, tokens column: "Five items with controls, about 150k tokens in, a third cached, 25 minutes, generation and verification."
+"Same focus, same digest, one call, asked for an item requiring all four cognitive levels." Point at the control's answer to "Could the key be found in the article's claims alone?": yes.
 
-"The verifier judges structure, not medicine. Two of twenty clean keys are clinically weak. The reviewer is still the last step, and the console shows them the evidence."
+Open Items. "Certified items carry their article, their path, the step each wrong option fails at, the verifier's findings and the reviewer's decision into the bank. The verifier judges structure; the reviewer judges the medicine."
 
 End on the builds list.
 
 ## Capture notes
 
-- Keep every pane at default zoom; the evidence lists are the point and must be legible.
-- Pause one second after each click; the necessity panel re-renders on each k.
-- No approvals, rejections or edits on camera: the records in `runs/` are the submission's evidence.
+- Keep the default zoom; the evidence lists are the point and must be legible.
+- Pause a second after each click; the necessity panel re-renders on each depth.
+- The composer edit on the home page does not launch anything; launches happen only from a source's build form.
