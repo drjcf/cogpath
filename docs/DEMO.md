@@ -1,6 +1,6 @@
 # Demo video: 3 minutes, on the live app
 
-The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00; the script below runs about 2:50 at a measured pace. Screen capture of https://cogpath.org at 1400 wide, signed in, voice-over recorded separately and laid over the capture. No music, no slides except the end card, captions on.
+The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00; the script below runs about 2:55 at a measured pace. Screen capture of https://cogpath.org at 1400 wide, signed in, voice-over recorded separately and laid over the capture. No music, no slides except the end card, captions on.
 
 Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab at item 1, the Review console of that article open in a third tab, the Items bank with at least the certified items from that build. Navigation only on camera: no decisions, no approvals, no launches.
 
@@ -8,13 +8,13 @@ Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab 
 
 ### 0:00 Home page, composer visible
 
-VO: "I chair the written exam committee of a specialty board. Every question on that exam is supposed to require reasoning, and every question a model writes for us tends to require recall: the answer is a sentence from the article, dressed as a case. Catching those costs reviewers hours; missing them costs the exam its validity. cogpath makes the model execute the reasoning instead, one typed step at a time, and then proves the question needs every step."
+VO: "Writing a high-stakes board exam question is slow, expert work. An item that assesses competency rather than memory takes a specialist hours to draft and a committee weeks to review, and a model asked to help writes questions whose answers the source already states. At EdAI Systems we set out to change that process with AI. The goal: an algorithmic process that builds exam questions well beyond simple recall, and makes every step transparent and easy to verify. This is cogpath."
 
 ### 0:22 Composer: pick the Evidence appraisal preset, switch the analysis kind to mechanism
 
 On camera: the glyph and the grammar text follow the change.
 
-VO: "A path is a program. Recall, analyze, evaluate, synthesize, each with parameters and a strict schema for what it produces. You compose it, or the planner designs one per item. Every step is a Muse Spark call on the Meta Model API: structured output under a strict schema, reasoning effort set per step, the PDF read natively, prefixes cached."
+VO: "The question is designed as a cognitive path: recall, analyze, evaluate, synthesize, each with parameters and a strict schema for what it produces. You compose it, or the planner designs one per item. Every step is a Muse Spark call on the Meta Model API: structured output, reasoning effort set per step, the PDF read natively, prefixes cached."
 
 ### 0:45 Sources, then Review on the GCA article: click two claims, move with S and the arrow keys
 
@@ -26,7 +26,7 @@ VO: "Before any item exists, the article becomes claims: verbatim spans, located
 
 On camera: read the glyph; the case box; the option tags.
 
-VO: "This item ran recall four, analyze, evaluate benefit against burden, synthesize a counseling plan. The case is one the article does not cover, so the last step had to adapt. Each wrong option is tagged with the step a learner who chose it failed at: recall, analyze, evaluate, synthesize."
+VO: "This item ran recall four, analyze, evaluate benefit against burden, synthesize a counseling plan. The case is one the article does not cover, so the last step had to adapt. Each wrong option is tagged with the step a learner who chose it failed at."
 
 ### 1:30 Second tab: How the answer was made
 
@@ -56,7 +56,7 @@ VO: "Nine builds, six sources, including a physics preprint, a statute and a pol
 
 Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
 
-VO: "What was not possible before: an item whose need for each cognitive step is checked rather than asserted. For a board, that is reviewer hours returned to judging the field, and a bank where every item carries its path, its checks and the person who certified it. cogpath, live at cogpath.org, built on the Meta Model API."
+VO: "What used to take weeks now takes minutes with Meta AI: an item compiled from an executed cognitive path, verified against the source and a single-shot control, transparent at every step, and certified by a person who judges the field. Now we can assess competency over recall, and show the proof in the item. cogpath, live at cogpath.org, built on the Meta Model API."
 
 ## Capture notes
 
