@@ -169,7 +169,7 @@ Candidates: `apply(scenario)`, `critique`, `predict`, `compare(sourceB)`.
 
 ## Docs
 
-`docs/SUBMISSION.md` is the hackathon write-up; `docs/DEMO.md` is the three-minute demo script against the consoles.
+`docs/SUBMISSION.md` is the hackathon write-up, `docs/HACKATHON.md` the submission package (gate, form text, rubric map, checklist), `docs/DEMO.md` the three-minute video script.
 
 ## Layout
 

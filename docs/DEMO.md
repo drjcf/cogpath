@@ -1,49 +1,68 @@
-# Demo script (about 3 minutes, on the live app)
+# Demo video: 3 minutes, on the live app
 
-Record the browser at 1400 wide on https://cogpath.org, signed in, with the Oct 28 GCA build (41 claims) open in a second tab. Items 1 and 2 of that build are full passes; item 1 is the one to walk through. Navigation only on camera: no decisions, no approvals, no launches.
+The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00; the script below runs about 2:50 at a measured pace. Screen capture of https://cogpath.org at 1400 wide, signed in, voice-over recorded separately and laid over the capture. No music, no slides except the end card, captions on.
 
-## 0:00 The claim (home page)
+Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab at item 1, the Review console of that article open in a third tab, the Items bank with at least the certified items from that build. Navigation only on camera: no decisions, no approvals, no launches.
 
-"A model asked for a question that requires analysis and synthesis writes one whose answer the article already states. cogpath makes the model execute the reasoning instead, one typed step at a time, and then tries to prove the question needs every step."
+## Shot list and voice-over
 
-Change one thing in the composer on camera: pick the Evidence appraisal preset, then switch the analysis kind to mechanism. The glyph and the grammar text follow. "The path is the design. You compose it, or the planner designs one per item."
+### 0:00 Home page, composer visible
 
-Scroll to the numbers at the foot and read them as they stand (the foot sums every build in the store). At the time of writing: "Across the builds so far, 37 of 45 path keys are not something the source already states; on the medical articles, 29 of 30. For single-shot items, 7 of 25." If there is time for one more sentence: "Five of the eight misses are a statute. Its claims are rules, and the verifier failed every item built on it rather than passing them."
+VO: "Ask a model for an exam question that requires analysis and synthesis, and it writes one whose answer the article already states. I chair a specialty board's written exam committee. Every one of those costs a reviewer's time, and the ones not caught cost the exam its validity. cogpath makes the model execute the reasoning instead, one typed step at a time, and then tries to prove the question needs every step."
 
-## 0:40 The article becomes claims (Sources, then Review on the GCA article)
+### 0:22 Composer: pick the Evidence appraisal preset, switch the analysis kind to mechanism
 
-Click two claims. The span highlights in the PDF. "Every claim is a verbatim span, located in the PDF, audited by a second reader, and certified by a person before any item is built on it."
+On camera: the glyph and the grammar text follow the change.
 
-Move between claims with `S` and `↑`. Point at the approved tag and the reviewer of record.
+VO: "A path is a program. Recall, analyze, evaluate, synthesize, each with parameters and a strict schema for what it produces. You compose it, or the planner designs one per item. Every step is a Muse Spark call on the Meta Model API: structured output under a strict schema, reasoning effort set per step, the PDF read natively, prefixes cached."
 
-## 1:10 The item (Builds, the GCA build, item 1, Item tab)
+### 0:45 Sources, then Review on the GCA article: click two claims, move with S and the arrow keys
 
-Read the glyph: Recall 4, Analyze, Evaluate benefit and burden, Synthesize counseling plan.
+On camera: each claim's span highlights in the PDF; the approved tag and the reviewer of record.
 
-Read the case box. "The article does not cover this patient. The synthesize step had to adapt."
+VO: "Before any item exists, the article becomes claims: verbatim spans, located in the PDF, audited by a second pass, certified by a person. Items rest on approved claims, not on the article as the model read it."
 
-Point at the option tags: fails at Recall, fails at Analyze, fails at Evaluate, fails at Synthesize. "Each wrong answer is what a learner who failed at that step would choose."
+### 1:05 Builds, the GCA build, item 1, Item tab
 
-## 1:40 How the answer was made (second tab)
+On camera: read the glyph; the case box; the option tags.
 
-Scroll once through the four steps. "These are the artifacts the model left behind: the facts with their spans, the relations with the misreading each invites, the strategies scored against the criteria, the plan adapted to the case. Nothing here is generated for display."
+VO: "This item ran recall four, analyze, evaluate benefit against burden, synthesize a counseling plan. The case is one the article does not cover, so the last step had to adapt. Each wrong option is tagged with the step a learner who chose it failed at: recall, analyze, evaluate, synthesize."
 
-## 2:10 What the verifier found (third tab)
+### 1:30 Second tab: How the answer was made
 
-Click the necessity buttons in order: no notes, steps 1 to 1, 1 to 2, 1 to 3, 1 to 4. "With the facts only, the picker cannot determine the key. With the relations, still not. With the evaluation, still not. With the synthesis, it can, and here is the quoted evidence for each clause, re-checked by the verifier."
+On camera: scroll once through the four steps.
 
-Point at the corruption list: "Corrupt any one step, re-run the rest without the article, and the key is unreachable: four of four."
+VO: "These are the artifacts the steps left behind: facts with their spans, relations with the misreading each invites, strategies scored against the criteria, the plan adapted to the case. Nothing here was generated for display."
 
-## 2:40 The control and the bank (fourth tab, then Items)
+### 1:50 Third tab: What the verifier found. Click the necessity buttons in order: no notes, 1, 1 to 2, 1 to 3, 1 to 4
 
-"Same focus, same digest, one call, asked for an item requiring all four cognitive levels." Point at the control's answer to "Could the key be found in the article's claims alone?": yes.
+On camera: pause a second on each depth; the evidence list appears at the last one. Then the corruption list.
 
-Open Items. "Certified items carry their article, their path, the step each wrong option fails at, the verifier's findings and the reviewer's decision into the bank. The verifier judges structure; the reviewer judges the medicine."
+VO: "Now the proof. The model is asked to pick the answer with the notes of step one only: undetermined. Steps one and two: undetermined. Three: undetermined. All four: the key, with quoted evidence that a judge in code re-checks against the notes. Then each step is corrupted the way a learner who fails there would, the rest re-run without the article, and the key is unreachable: four of four."
 
-End on the builds list.
+### 2:20 Fourth tab: Single-shot control
+
+On camera: the control's answer to "Could the key be found in the article's claims alone?"
+
+VO: "The control: same focus, same claims, one call, asked for an item requiring all four cognitive levels. Its key is something the article already states."
+
+### 2:32 Home page foot, then Items
+
+On camera: the summed numbers; the bank with certified items and their decisions.
+
+VO: "Across nine builds on six sources, including a physics preprint, a statute and a policy article, 37 of 45 path keys are not stated by the source; for single-shot items, 7 of 25. The verifier judges structure; the reviewer judges the field, and certified items carry their path, their checks and the decision into the bank."
+
+### 2:48 End card
+
+Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
+
+VO: "cogpath. Live at cogpath.org on Firebase and Cloud Run, built on the Meta Model API."
 
 ## Capture notes
 
-- Keep the default zoom; the evidence lists are the point and must be legible.
-- Pause a second after each click; the necessity panel re-renders on each depth.
-- The composer edit on the home page does not launch anything; launches happen only from a source's build form.
+- Read the numbers off the home page as they stand on recording day; the foot sums every build in the store. Update the 2:32 line if a build has been added.
+- Keep the default zoom; the evidence lists are the point and must be legible. Cursor visible, no cursor effects.
+- The composer edit on the home page launches nothing; launches happen only from a source's build form.
+- Pause a second after each necessity click; the panel re-renders per depth.
+- Trim dead time in the edit rather than talking faster. If the cut runs over 3:00, drop the 1:30 walkthrough scroll to one screen rather than cutting the verifier section.
+- Export at 1080p, upload to YouTube as unlisted, and test the link in a logged-out browser before submitting.
