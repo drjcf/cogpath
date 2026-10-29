@@ -4,7 +4,9 @@ Submissions are due Wed Nov 4, 9:00 PM ET (3:00 PM HST) on the Cerebral Valley p
 
 ## Pass/fail gate
 
-**Problem statement: Build for Your World.** The builder chairs a specialty board's written exam committee; the problem is item writing for credentialing exams, known firsthand.
+**Problem statement: Build for Your World** ("bring Meta's models into your domain, solve a problem you know firsthand, free up time and mental space, and make something possible that wasn't before"). The builder chairs a specialty board's written exam committee; the problem is item writing for credentialing exams, known firsthand. What was not possible before: an item whose need for each cognitive step is checked rather than asserted.
+
+**Track: Startup**, judged on technical execution and whether it holds up in production. The production evidence is the live deployment (Cloud Run service and jobs, Firestore, Cloud Storage, Firebase Auth with an allowlist, Secret Manager), live progress on every build, and the test suite (pipeline in mock mode, the store on a Firestore emulator, the API end to end with a worker process).
 
 **Meta models: Muse Spark 1.3 through the Meta Model API**, in every stage of the pipeline: claim extraction from native PDF input, each path step under a strict JSON schema with reasoning effort set per step, item assembly, and every verifier pick (depth-limited necessity picks, corruption re-runs, the recall and cover checks, the single-shot control). Prompt caching on the shared prefixes. No open-weight models are used, so the open-weight bonus does not apply.
 
@@ -12,11 +14,7 @@ Submissions are due Wed Nov 4, 9:00 PM ET (3:00 PM HST) on the Cerebral Valley p
 
 ## New work only
 
-The rules disqualify a demo that shows anything not built during the event (Oct 26 to Nov 4). The public history starts with the 0.6.0 import on Oct 28; judges reading the repo see that first. Add a dated timeline to the README before submitting, in the builder's own words, stating when the grammar, the verifier, the consoles and the cloud deployment were written. Fill in the start date here and move the paragraph to the README once it is right:
-
-> cogpath was started on [date] for this hackathon. The path grammar, the ops, the verifier, the review and builds consoles, the GCP deployment and the composer were written between [date] and Nov 4, 2026. Earlier EdAI Systems work on item generation (a single-shot generator) shares no code with this repository. The build used an AI coding assistant alongside the builder, who designed the grammar and the checks and reviewed every item.
-
-Remove the last sentence if it is not accurate; keep it if it is, since "unclear contribution" is the stated disqualifier and an undisclosed assistant is the easiest way to look unclear.
+The rules disqualify a demo that shows anything not built during the event (Oct 26 to Nov 4). The public history starts with the 0.6.0 import on Oct 28; judges reading the repo see that first, so the README carries a dated timeline (section "Built during the hackathon"): work started Oct 26, 2026, the day of the kickoff, and everything in the repository was written between then and the submission. The README also states that an AI coding assistant was used alongside the builder; "unclear contribution" is the stated disqualifier, and an undisclosed assistant is the easiest way to look unclear.
 
 ## Form text
 
@@ -34,11 +32,13 @@ The verifier then uses the model against itself. It asks for the answer with the
 
 Across nine builds on six sources (45 items), 37 keys were not stated by the source, 32 needed the full path, 14 passed all six checks; single-shot controls, 7 of 25. A reviewer certifies or rejects each item with a reason, and the bank exports with the path, the checks and the decision.
 
+It runs in production at cogpath.org: a React console on Firebase Hosting, an Express API on Cloud Run, a Cloud Run Job per ingest or build with live progress, Firestore and Cloud Storage for the records, Firebase Auth with a reviewer allowlist, the model key in Secret Manager, and a test suite that runs the pipeline, the store and the API end to end.
+
 **Built with.** Meta Model API (Muse Spark 1.3): structured output with strict schemas, per-step reasoning effort, native PDF input, prompt caching. Node 22, React, Vite, Express. Firebase Hosting and Auth, Cloud Run (service and jobs), Firestore, Cloud Storage, Secret Manager.
 
 **Links.** Live: https://cogpath.org. Repo: https://github.com/drjcf/cogpath. Video: [YouTube link]. Demo post on X: [link, for the Most Viral award; optional].
 
-**Team.** John Ferguson, EdAI Systems, Inc. (representative). Track: [startup or indie, as applied].
+**Team.** John Ferguson, EdAI Systems, Inc. (representative). Track: Startup. Problem statement: Build for Your World.
 
 ## Rubric, where each point is made
 
@@ -61,7 +61,7 @@ Submit the post link on the platform; engagement counts through Nov 8.
 
 - [ ] Claim the $150 Meta Model API credits on the credit form (deadline Nov 4, 9 PM ET, same as submission; cannot be done after).
 - [ ] Add a `LICENSE` file (the rules say open source; MIT is the usual choice, the license is the builder's call) and `"license"` in `package.json`.
-- [ ] Add the dated timeline paragraph above to the README.
+- [x] Dated timeline in the README ("Built during the hackathon"): started Oct 26, startup track, Build for Your World.
 - [ ] Decide the pending items on the live app so the Items bank is not empty on camera (recommended: certify GCA Oct 28 items 1, 4, 5; policy items 1, 2).
 - [ ] Redeploy so the export carries the control's verdict and the home copy reads "right in the field" (`deploy/deploy.sh image service hosting`).
 - [ ] Record the video from `docs/DEMO.md`; export 1080p; upload unlisted; open the link in a logged-out browser.

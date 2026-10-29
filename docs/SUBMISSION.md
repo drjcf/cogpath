@@ -4,6 +4,8 @@
 
 **Live app.** https://cogpath.org (reads are public; uploading, reviewing, approving and building need an allowlisted Google account). Code: https://github.com/drjcf/cogpath.
 
+**Problem statement: Build for Your World. Track: Startup.** Built from October 26, 2026, by John Ferguson, EdAI Systems, Inc.; the README has the timeline.
+
 ## Problem
 
 Generated multiple-choice items read well and test recall. A model asked for an item that "requires analysis, evaluation and synthesis" produces a vignette whose key is a sentence the source already states. Boards cannot use such items, and nobody can tell them apart from good ones by reading.

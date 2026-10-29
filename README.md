@@ -4,6 +4,10 @@ Compile assessment items from a **cognitive path**. Instead of asking a model to
 
 Built on the Meta Model API (Muse Spark 1.3): structured output with constrained decoding, per-step reasoning effort, native PDF input, automatic prefix caching. Live at https://cogpath.org (also https://edai-prep-25580.web.app); the write-up is `docs/SUBMISSION.md`.
 
+## Built during the hackathon
+
+cogpath was started on October 26, 2026, the day of the Meta Global AI Developer Hackathon kickoff, for the Build for Your World problem statement, startup track. The path grammar, the ops, the verifier, the review and builds consoles, the composer, the GCP deployment and every build in the results were written between October 26 and the submission on November 4, 2026; the public history begins with the 0.6.0 import on October 28, which carried the work of the first two days. Earlier EdAI Systems work on item generation (a single-shot generator) shares no code with this repository. The build used an AI coding assistant alongside the builder, who designed the grammar and the checks and reviewed every item. Builder: John Ferguson, EdAI Systems, Inc.
+
 ## Quick start
 
 ```bash
