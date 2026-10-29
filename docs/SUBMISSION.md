@@ -50,19 +50,21 @@ Firebase Hosting serves the React console; `/api/**` rewrites to a Cloud Run ser
 
 ## Results
 
-Six builds, three articles (a mortality survey, a narrative review, a cohort study), 30 path items and 25 single-shot controls:
+Eight builds, five sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act), 40 path items and 25 single-shot controls:
 
-| | path items | single-shot controls |
-|---|---|---|
-| key not stated by the source | 29/30 | 7/25 |
-| key needs the full path | 24/30 | n/a |
-| all six checks | 11/30 | n/a |
+| | path items | medical articles only | single-shot controls |
+|---|---|---|---|
+| key not stated by the source | 33/40 | 29/30 | 7/25 |
+| key needs the full path | 28/40 | 24/30 | n/a |
+| all six checks | 11/40 | 11/30 | n/a |
+
+The physics preprint behaved like the medical articles (4 of 5 keys not stated, 3 of 5 needing the full path). The statute did not: every key failed digestRecall, because a statute's claims are rules and applying a rule to a scenario is, to that check, recall. The verifier reported it rather than passing it.
 
 A build of five items with controls costs about 150k input tokens (a third to a half cached) and 150k output tokens, 25 to 30 minutes, generation plus verification. On the review article, the first composed-path build showed the evidence-appraisal path producing two items that need the full path and the mechanism-to-management path one in three: path shape interacts with article type, which the composer makes measurable.
 
 ## What it does not do
 
-The verifier judges structure, not medicine. Several clean keys are clinically weak, and one article's "seven weeks to normalize vitamin D" claim produced a "postpone the operation" key in three separate builds; the item review exists for that. Cover-the-options is harder for an adapted item than for a generic one, so the arms are not symmetric on that check. The digest is a model-generated intermediate; its review step exists because an error in it reaches every item. Paths are linear; DAG paths (two recalls feeding one analysis) with branch-ablation necessity are the next step.
+The verifier judges structure, not medicine. Several clean keys are clinically weak, and one article's "seven weeks to normalize vitamin D" claim produced a "postpone the operation" key in three separate builds; the item review exists for that. Cover-the-options is harder for an adapted item than for a generic one, so the arms are not symmetric on that check. The digest is a model-generated intermediate; its review step exists because an error in it reaches every item. The framework is built for sources that report findings; on a source that states rules (a statute) the keys are rule applications and digestRecall fails them. Paths are linear; DAG paths (two recalls feeding one analysis) with branch-ablation necessity are the next step.
 
 ## Repository
 

@@ -202,7 +202,7 @@ samples/          de-identified teaching summary used by the tests
 
 ## Results
 
-Four builds on three articles, each 5 path items with a single-shot control on the same focus, `--deep --baseline`, verifier at the 0.5.1 rules (the three earlier builds were re-scored with `rescore`, which re-judges stored picks and makes no new calls). Sources: an ABCS survey of gluteal fat grafting mortality (56 approved claims), a PRS review of perioperative nutrition (47), and a cohort study of new arterial lesions in giant cell arteritis (40).
+Eight builds on five sources, each 5 path items with a single-shot control on the same focus, `--deep --baseline`, verifier at the 0.5.1 rules (the three earliest builds were re-scored with `rescore`, which re-judges stored picks and makes no new calls). Sources: an ABCS survey of gluteal fat grafting mortality (56 approved claims), a PRS review of perioperative nutrition (47), a cohort study of new arterial lesions in giant cell arteritis (40), and, outside medicine, a theoretical-physics preprint on a QFT information protocol for charged black holes and the Patent Act (Title 35, United States Code).
 
 | build | source | path: necessity k4 | path: digestRecall | path: all checks | single-shot: digestRecall | generation tokens in (cached) / out | min |
 |---|---|---|---|---|---|---|---|
@@ -212,9 +212,13 @@ Four builds on three articles, each 5 path items with a single-shot control on t
 | mvrvace5 | GCA arterial lesions cohort (0.5.1) | 4/5 | 4/5 | 3/5 | 2/5 | 144k (64k) / 139k | 31 |
 | cloud, Oct 28 | GCA arterial lesions cohort, re-read (41 claims), first build on Cloud Run | 4/5 | 5/5 | 2/5 | 1/5 | 148k (67k) / 141k | 28 |
 | mvshukq7 | perioperative nutrition review, two composed paths | 3/5 | 5/5 | 1/5 | not exported | | |
-| **total** | | **24/30** | **29/30** | **11/30** | **7/25** | | |
+| mvswxj1o | QFT information protocol for charged black holes (physics preprint) | 3/5 | 4/5 | 0/5 | not exported | | |
+| mvsx8z6c | Patent Act, Title 35 U.S.C. | 1/5 | 0/5 | 0/5 | not exported | | |
+| **total** | | **28/40** | **33/40** | **11/40** | **7/25** | | |
 
-digestRecall is the one check both arms take: is the key something the source's claims already state? 29 of 30 path keys are not; 18 of 25 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 24 of 30 path items; the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
+digestRecall is the one check both arms take: is the key something the source's claims already state? 33 of 40 path keys are not (29 of 30 on the medical articles); 18 of 25 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 28 of 40 path items (24 of 30 on the medical articles); the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
+
+Two builds outside medicine, both planner mode. On the physics preprint the path items behaved as on the medical articles: 4 of 5 keys not stated by the source, 3 of 5 needing the full path, and what failed was cover on one item and distractor mapping on the others. On the Patent Act the verifier failed every item on digestRecall. A statute's claims are rules, and an item that applies a rule to a scenario has a key the digest already states once the stem supplies the scenario; sourceRecall, which sees only recommendation claims, passed trivially because a statute makes none. The framework was built for sources that report findings, and on a source that states rules the verifier reports that rather than passing it.
 
 The composed-path build (mvshukq7) is the first with paths chosen by the designer rather than the planner: items 1, 3 and 5 ran `recall(5) > analyze(mechanism, relations=3) > evaluate(efficacy, safety) > synthesize`, items 2 and 4 ran the evidence-appraisal preset. On this review article the appraisal path produced two items that need the full path and the mechanism-to-management path one in three; path shape interacts with article type, and the composer is how that gets measured. The all-checks column is the strict conjunction of six checks and is where the remaining item-quality problems show: cover-the-options (a free answer from the source maps onto the key) went 16/20, and distractor mapping (corrupting each step blocks the key) went 9/20 at 4/4. Both are reported per item in the builds console.
 

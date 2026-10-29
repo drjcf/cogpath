@@ -63,7 +63,7 @@ export default function Home() {
             <div><span className="num">{ctrlStated ?? 'none'}</span><span className="num-label">single-shot controls whose key the article does not already state</span></div>
             <div><span className="num">{necessity}</span><span className="num-label">path items whose key needs every step</span></div>
           </div>
-          <p className="muted">The checks are conservative: a picker that over-reads a note counts against the path item, never for it. What the verifier cannot judge is whether the key is good medicine; that is what the item review is for.</p>
+          <p className="muted">The checks are conservative: a picker that over-reads a note counts against the path item, never for it. What the verifier cannot judge is whether the key is right in the field; that is what the item review is for.</p>
         </section>
       ) : null}
     </div>

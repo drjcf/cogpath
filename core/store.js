@@ -363,6 +363,7 @@ export async function decideItem(buildId, itemId, { action, reason = '', by = ''
 export function exportItem(build, rec, decision) {
   const item = rec.trace.item;
   const v = rec.verification;
+  const bv = build.baselines?.find((b) => b.plan.id === rec.plan.id)?.verification;
   return {
     id: `${build.id}/${rec.plan.id}`, build: build.id, item: rec.plan.id,
     source: { title: build.source?.title ?? null, sha: build.source?.sha ?? null, claims: rec.plan.claims ?? [] },
@@ -372,6 +373,8 @@ export function exportItem(build, rec, decision) {
     key: item.key,
     explanation: item.explanation ?? null,
     verification: v ? { passed: v.summary.passed, applicable: v.summary.applicable, pass: v.summary.pass, necessity: v.pathNecessity?.determinedAt ?? null, pathLength: v.pathNecessity?.pathLength ?? null, digestRecall: v.digestRecall?.skipped ? null : v.digestRecall?.pass ?? null, sourceRecall: v.sourceRecall?.skipped ? null : v.sourceRecall?.pass ?? null, cover: v.coverTheOptions?.pass ?? null, keyBlocked: v.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : null } : null,
+    // The single-shot control on the same focus, when the build ran one: the checks both arms share.
+    control: bv ? { pass: bv.summary.pass, digestRecall: bv.digestRecall?.skipped ? null : bv.digestRecall?.pass ?? null, sourceRecall: bv.sourceRecall?.skipped ? null : bv.sourceRecall?.pass ?? null, cover: bv.coverTheOptions?.pass ?? null } : null,
     decision: decision ?? { status: 'pending' },
     builtAt: rec.trace.createdAt ?? build.createdAt, by: build.by ?? null,
   };

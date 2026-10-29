@@ -102,6 +102,7 @@ test('api: upload, ingest job, review, approve, build job, record and events', a
   assert.equal((await post(`/builds/${buildId}/items/item1/decide`, { action: 'maybe' }, as('rev@example.com'))).status, 400);
   const ex = (await get(`/builds/${buildId}/export`)).body;
   assert.equal(ex.count, 1); assert.equal(ex.items[0].item, 'item1'); assert.equal(ex.items[0].options.filter((o) => o.key).length, 1); assert.ok(ex.items[0].options.some((o) => o.failsAt === 'recall')); assert.equal(ex.items[0].decision.status, 'certified');
+  assert.equal(typeof ex.items[0].control.pass, 'boolean'); assert.ok('digestRecall' in ex.items[0].control);
   assert.equal((await get(`/builds/${buildId}/export?status=all`)).body.count, 2);
   const bank = (await get('/items')).body;
   assert.equal(bank.count, 1); assert.equal(bank.items[0].build, buildId);
