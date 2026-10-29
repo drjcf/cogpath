@@ -2,7 +2,7 @@
 
 **Tagline.** Instead of asking a model to write a hard question, make it execute the reasoning the question is supposed to require, one typed step at a time, then prove the question needs every step, then let a person certify it.
 
-**Live app.** https://edai-prep-25580.web.app (reads are public; uploading, reviewing, approving and building need an allowlisted Google account). Code: https://github.com/drjcf/cogpath.
+**Live app.** https://cogpath.org (reads are public; uploading, reviewing, approving and building need an allowlisted Google account). Code: https://github.com/drjcf/cogpath.
 
 ## Problem
 

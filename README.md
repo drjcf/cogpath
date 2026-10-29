@@ -2,7 +2,7 @@
 
 Compile assessment items from a **cognitive path**. Instead of asking a model to "write a hard question", cogpath makes the model *execute* the reasoning a learner must perform (recall > analyze > evaluate > synthesize) over a source, one typed artifact per step, then assembles a single-best-answer item whose key is the terminal artifact and whose distractors are **failures at specific steps**. It then verifies that the full path is actually necessary to reach the key.
 
-Built on the Meta Model API (Muse Spark 1.3): structured output with constrained decoding, per-step reasoning effort, native PDF input, automatic prefix caching. Live at https://edai-prep-25580.web.app; the write-up is `docs/SUBMISSION.md`.
+Built on the Meta Model API (Muse Spark 1.3): structured output with constrained decoding, per-step reasoning effort, native PDF input, automatic prefix caching. Live at https://cogpath.org (also https://edai-prep-25580.web.app); the write-up is `docs/SUBMISSION.md`.
 
 ## Quick start
 
@@ -106,7 +106,7 @@ npm run build:web      # builds web/dist once (or: npm run web for the Vite dev 
 npm run serve          # http://localhost:3077  (PORT=… to change; reads COGPATH_DATA like the CLI)
 ```
 
-Deployed at https://edai-prep-25580.web.app (reads are public; writing needs an allowlisted Google account). The design notes are in `web/DESIGN.md`: color means a step, a verdict, or nothing; the path glyph is the one recurring element.
+Deployed at https://cogpath.org (reads are public; writing needs an allowlisted Google account). The design notes are in `web/DESIGN.md`: color means a step, a verdict, or nothing; the path glyph is the one recurring element.
 
 **Home** (`#/`) is the path composer with the explanation beside it: the four steps as editors (facts to recall; analysis kind and relation count; evaluation criteria in priority order and strategies weighed; what the key is), five presets, the glyph and the grammar text they produce, and the verifier's five questions. The numbers at the foot are summed from every finished build.
 

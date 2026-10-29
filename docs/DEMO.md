@@ -1,6 +1,6 @@
 # Demo script (about 3 minutes, on the live app)
 
-Record the browser at 1400 wide on https://edai-prep-25580.web.app, signed in, with the Oct 28 GCA build (41 claims) open in a second tab. Items 1 and 2 of that build are full passes; item 1 is the one to walk through. Navigation only on camera: no decisions, no approvals, no launches.
+Record the browser at 1400 wide on https://cogpath.org, signed in, with the Oct 28 GCA build (41 claims) open in a second tab. Items 1 and 2 of that build are full passes; item 1 is the one to walk through. Navigation only on camera: no decisions, no approvals, no launches.
 
 ## 0:00 The claim (home page)
 
