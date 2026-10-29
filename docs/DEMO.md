@@ -8,7 +8,7 @@ Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab 
 
 ### 0:00 Home page, composer visible
 
-VO: "Ask a model for an exam question that requires analysis and synthesis, and it writes one whose answer the article already states. I chair a specialty board's written exam committee. Every one of those costs a reviewer's time, and the ones not caught cost the exam its validity. cogpath makes the model execute the reasoning instead, one typed step at a time, and then tries to prove the question needs every step."
+VO: "I chair the written exam committee of a specialty board. Every question on that exam is supposed to require reasoning, and every question a model writes for us tends to require recall: the answer is a sentence from the article, dressed as a case. Catching those costs reviewers hours; missing them costs the exam its validity. cogpath makes the model execute the reasoning instead, one typed step at a time, and then proves the question needs every step."
 
 ### 0:22 Composer: pick the Evidence appraisal preset, switch the analysis kind to mechanism
 
@@ -32,7 +32,7 @@ VO: "This item ran recall four, analyze, evaluate benefit against burden, synthe
 
 On camera: scroll once through the four steps.
 
-VO: "These are the artifacts the steps left behind: facts with their spans, relations with the misreading each invites, strategies scored against the criteria, the plan adapted to the case. Nothing here was generated for display."
+VO: "These are the artifacts the steps left behind: facts with spans, relations with their misreadings, strategies scored, the plan adapted to the case. Nothing here was generated for display."
 
 ### 1:50 Third tab: What the verifier found. Click the necessity buttons in order: no notes, 1, 1 to 2, 1 to 3, 1 to 4
 
@@ -50,13 +50,13 @@ VO: "The control: same focus, same claims, one call, asked for an item requiring
 
 On camera: the summed numbers; the bank with certified items and their decisions.
 
-VO: "Across nine builds on six sources, including a physics preprint, a statute and a policy article, 37 of 45 path keys are not stated by the source; for single-shot items, 7 of 25. The verifier judges structure; the reviewer judges the field, and certified items carry their path, their checks and the decision into the bank."
+VO: "Nine builds, six sources, including a physics preprint, a statute and a policy article: 37 of 45 path keys are not stated by the source; single-shot, 7 of 25. The verifier judges structure; the reviewer judges the field."
 
-### 2:48 End card
+### 2:44 End card
 
 Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
 
-VO: "cogpath. Live at cogpath.org on Firebase and Cloud Run, built on the Meta Model API."
+VO: "What was not possible before: an item whose need for each cognitive step is checked rather than asserted. For a board, that is reviewer hours returned to judging the field, and a bank where every item carries its path, its checks and the person who certified it. cogpath, live at cogpath.org, built on the Meta Model API."
 
 ## Capture notes
 
