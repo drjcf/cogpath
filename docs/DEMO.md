@@ -8,7 +8,7 @@ Record the browser at 1400 wide on https://edai-prep-25580.web.app, signed in, w
 
 Change one thing in the composer on camera: pick the Evidence appraisal preset, then switch the analysis kind to mechanism. The glyph and the grammar text follow. "The path is the design. You compose it, or the planner designs one per item."
 
-Scroll to the numbers at the foot and read them as they stand (the foot sums every build in the store). At the time of writing: "Across the builds so far, 33 of 40 path keys are not something the source already states; on the medical articles, 29 of 30. For single-shot items, 7 of 25." If there is time for one more sentence: "The seven misses are a statute. Its claims are rules, and the verifier failed every item built on it rather than passing them."
+Scroll to the numbers at the foot and read them as they stand (the foot sums every build in the store). At the time of writing: "Across the builds so far, 37 of 45 path keys are not something the source already states; on the medical articles, 29 of 30. For single-shot items, 7 of 25." If there is time for one more sentence: "Five of the eight misses are a statute. Its claims are rules, and the verifier failed every item built on it rather than passing them."
 
 ## 0:40 The article becomes claims (Sources, then Review on the GCA article)
 

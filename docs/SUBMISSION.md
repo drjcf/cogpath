@@ -50,15 +50,15 @@ Firebase Hosting serves the React console; `/api/**` rewrites to a Cloud Run ser
 
 ## Results
 
-Eight builds, five sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act), 40 path items and 25 single-shot controls:
+Nine builds, six sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act, a policy article on welfare fraud-detection algorithms), 45 path items and 25 single-shot controls:
 
 | | path items | medical articles only | single-shot controls |
 |---|---|---|---|
-| key not stated by the source | 33/40 | 29/30 | 7/25 |
-| key needs the full path | 28/40 | 24/30 | n/a |
-| all six checks | 11/40 | 11/30 | n/a |
+| key not stated by the source | 37/45 | 29/30 | 7/25 |
+| key needs the full path | 32/45 | 24/30 | n/a |
+| all six checks | 14/45 | 11/30 | n/a |
 
-The physics preprint behaved like the medical articles (4 of 5 keys not stated, 3 of 5 needing the full path). The statute did not: every key failed digestRecall, because a statute's claims are rules and applying a rule to a scenario is, to that check, recall. The verifier reported it rather than passing it.
+The physics preprint behaved like the medical articles (4 of 5 keys not stated, 3 of 5 needing the full path). The policy article, built with the clinical management path composed onto every item (recall, causal analysis, evaluate on efficacy and safety, synthesize), gave the best build so far: 4 of 5 not stated, 4 of 5 full path, 3 of 5 passing all six checks. The statute did not: every key failed digestRecall, because a statute's claims are rules and applying a rule to a scenario is, to that check, recall. The verifier reported it rather than passing it.
 
 A build of five items with controls costs about 150k input tokens (a third to a half cached) and 150k output tokens, 25 to 30 minutes, generation plus verification. On the review article, the first composed-path build showed the evidence-appraisal path producing two items that need the full path and the mechanism-to-management path one in three: path shape interacts with article type, which the composer makes measurable.
 
