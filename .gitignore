@@ -6,3 +6,4 @@ web/node_modules/
 deploy/firebase-web-config.json
 deploy/.last-image
 web/dist/
+docs/video/stills/

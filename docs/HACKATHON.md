@@ -30,7 +30,7 @@ cogpath treats the cognitive path as a program: `recall(4) > analyze(causal) > e
 
 The verifier then uses the model against itself. It asks for the answer with the notes of steps 1 to k only, with the source withheld and outside knowledge forbidden, and requires the key to become determinable only at the last step; a judge in code re-checks every quoted piece of evidence against the notes. It corrupts each step the way a learner who fails there would, re-runs the rest, and requires the key to be unreachable. A single-shot control on the same focus takes the checks both arms share.
 
-Across nine builds on six sources (45 items), 37 keys were not stated by the source, 32 needed the full path, 14 passed all six checks; single-shot controls, 7 of 25. A reviewer certifies or rejects each item with a reason, and the bank exports with the path, the checks and the decision.
+Across nine builds on six sources (45 items), 37 keys were not stated by the source, 32 needed the full path, 14 passed all six checks; single-shot controls, 13 of 45. A reviewer certifies or rejects each item with a reason, and the bank exports with the path, the checks and the decision.
 
 It runs in production at cogpath.org: a React console on Firebase Hosting, an Express API on Cloud Run, a Cloud Run Job per ingest or build with live progress, Firestore and Cloud Storage for the records, Firebase Auth with a reviewer allowlist, the model key in Secret Manager, and a test suite that runs the pipeline, the store and the API end to end.
 
@@ -53,7 +53,7 @@ Bonus worth claiming: Best Agentic Use-Case ($5K, multi-step workflows). The pip
 
 ## Demo post on X (optional, for the Most Viral award)
 
-> Ask a model for an exam question that needs analysis and it writes one the article already answers. cogpath makes the model execute the reasoning, one typed step at a time, then proves the question needs every step: 37/45 keys not stated by the source vs 7/25 single-shot. Live: cogpath.org [video]
+> Ask a model for an exam question that needs analysis and it writes one the article already answers. cogpath makes the model execute the reasoning, one typed step at a time, then proves the question needs every step: 37/45 keys not stated by the source vs 13/45 single-shot. Live: cogpath.org [video]
 
 Submit the post link on the platform; engagement counts through Nov 8.
 

@@ -215,13 +215,13 @@ Nine builds on six sources, each 5 path items with a single-shot control on the 
 | mvrdng86 | GCA arterial lesions cohort (0.5.0) | 5/5 | 5/5 | 1/5 | 1/5 | 143k (60k) / 157k | 24 |
 | mvrvace5 | GCA arterial lesions cohort (0.5.1) | 4/5 | 4/5 | 3/5 | 2/5 | 144k (64k) / 139k | 31 |
 | cloud, Oct 28 | GCA arterial lesions cohort, re-read (41 claims), first build on Cloud Run | 4/5 | 5/5 | 2/5 | 1/5 | 148k (67k) / 141k | 28 |
-| mvshukq7 | perioperative nutrition review, two composed paths | 3/5 | 5/5 | 1/5 | not exported | | |
-| mvswxj1o | QFT information protocol for charged black holes (physics preprint) | 3/5 | 4/5 | 0/5 | not exported | | |
-| mvsx8z6c | Patent Act, Title 35 U.S.C. | 1/5 | 0/5 | 0/5 | not exported | | |
-| mvtr1b8b | welfare fraud-detection algorithms (policy article), one composed path | 4/5 | 4/5 | 3/5 | not exported | | |
-| **total** | | **32/45** | **37/45** | **14/45** | **7/25** | | |
+| mvshukq7 | perioperative nutrition review, two composed paths | 3/5 | 5/5 | 1/5 | 1/5 | | |
+| mvswxj1o | QFT information protocol for charged black holes (physics preprint) | 3/5 | 4/5 | 0/5 | 1/5 | | |
+| mvsx8z6c | Patent Act, Title 35 U.S.C. | 1/5 | 0/5 | 0/5 | 2/5 | | |
+| mvtr1b8b | welfare fraud-detection algorithms (policy article), one composed path | 4/5 | 4/5 | 3/5 | 2/5 | | |
+| **total** | | **32/45** | **37/45** | **14/45** | **13/45** | | |
 
-digestRecall is the one check both arms take: is the key something the source's claims already state? 37 of 45 path keys are not (29 of 30 on the medical articles); 18 of 25 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 32 of 45 path items (24 of 30 on the medical articles); the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
+digestRecall is the one check both arms take: is the key something the source's claims already state? 37 of 45 path keys are not (29 of 30 on the medical articles); 32 of 45 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 32 of 45 path items (24 of 30 on the medical articles); the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
 
 Three builds outside medicine. On the physics preprint (planner mode) the path items behaved as on the medical articles: 4 of 5 keys not stated by the source, 3 of 5 needing the full path, and what failed was cover on one item and distractor mapping on the others. On the policy article, with one composed path on every item (`recall(5) > analyze(causal) > evaluate(efficacy, safety) > synthesize`, the management preset with the synthesis form left open), 4 of 5 keys were not stated, 4 of 5 needed the full path and 3 of 5 passed all six checks, the best build so far; the criteria written for clinical management transferred to administrative decisions without change. On the Patent Act (planner mode) the verifier failed every item on digestRecall. A statute's claims are rules, and an item that applies a rule to a scenario has a key the digest already states once the stem supplies the scenario; sourceRecall, which sees only recommendation claims, passed trivially because a statute makes none. The framework was built for sources that report findings, and on a source that states rules the verifier reports that rather than passing it.
 

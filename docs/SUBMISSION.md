@@ -52,11 +52,11 @@ Firebase Hosting serves the React console; `/api/**` rewrites to a Cloud Run ser
 
 ## Results
 
-Nine builds, six sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act, a policy article on welfare fraud-detection algorithms), 45 path items and 25 single-shot controls:
+Nine builds, six sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act, a policy article on welfare fraud-detection algorithms), 45 path items and 45 single-shot controls:
 
 | | path items | medical articles only | single-shot controls |
 |---|---|---|---|
-| key not stated by the source | 37/45 | 29/30 | 7/25 |
+| key not stated by the source | 37/45 | 29/30 | 13/45 |
 | key needs the full path | 32/45 | 24/30 | n/a |
 | all six checks | 14/45 | 11/30 | n/a |
 
