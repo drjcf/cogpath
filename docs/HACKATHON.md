@@ -44,7 +44,7 @@ It runs in production at cogpath.org: a React console on Firebase Hosting, an Ex
 
 | criterion | weight | where the video and the repo carry it |
 | --- | --- | --- |
-| Impact | 30% | the opening claim (0:00), the results and the bank (2:11); README results on six sources |
+| Impact | 30% | the opening claim (0:00), the results and the bank (2:21); README results on six sources |
 | Meta AI tooling | 25% | the composer line on structured output, effort per step, native PDF, caching (0:22); the verifier using the model under controlled information (1:50); `core/ops`, `core/verifier.js` |
 | Demo | 25% | the live app end to end, one item followed from claims to verdict; nothing staged |
 | Technical depth | 20% | the picker discipline re-checked in code, local re-scoring, the cloud shape with jobs and live progress, 30 tests on a Firestore emulator and a worker process |

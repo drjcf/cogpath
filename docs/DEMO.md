@@ -1,6 +1,6 @@
 # Demo video: 3 minutes, on the live app
 
-The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 459 words: at 165 words a minute it runs about 2:53, at 150 about 3:07, over the cap. Record at a brisk, even pace, and if the take runs long cut the 1:25 walkthrough shot first (29 words); the times below assume 165. The first 32 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
+The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 459 words. The Nov 3 take runs 3:04.6 with the pauses between lines; cutting each pause after the animation to 0.4 s (10 s in all) lands it near 2:54, so no shot needs to go. The times below are line start times in that raw take (full table in the last section); each moves earlier by whatever pause is trimmed before it. The first 32 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
 
 Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab at item 1, the Review console of that article open in a third tab, the Items bank with at least the certified items from that build. Navigation only on camera: no decisions, no approvals, no launches.
 
@@ -18,43 +18,43 @@ On camera: cut in on the composer already visible; the glyph and the grammar tex
 
 VO: "The question is designed as a cognitive path: recall, analyze, evaluate, synthesize, each with parameters and a strict schema for what it produces. You compose it, or the planner designs one per item. Every step is a Muse Spark call on the Meta Model API: structured output, reasoning effort set per step, the PDF read natively, prefixes cached."
 
-### 0:55 Sources, then Review on the GCA article: click two claims, move with S and the arrow keys
+### 0:56 Sources, then Review on the GCA article: click two claims, move with S and the arrow keys
 
 On camera: each claim's span highlights in the PDF; the approved tag and the reviewer of record.
 
 VO: "Before any item exists, the article becomes claims: verbatim spans, located in the PDF, audited by a second pass, certified by a person. Items rest on approved claims, not on the article as the model read it."
 
-### 1:09 Builds, the GCA build, item 1, Item tab
+### 1:11 Builds, the GCA build, item 1, Item tab
 
 On camera: read the glyph; the case box; the option tags.
 
 VO: "This item ran recall four, analyze, evaluate benefit against burden, synthesize a counseling plan. The case is one the article does not cover, so the last step had to adapt. Each wrong option is tagged with the step a learner who chose it failed at."
 
-### 1:25 Second tab: How the answer was made
+### 1:28 Second tab: How the answer was made
 
 On camera: scroll once through the four steps.
 
 VO: "These are the artifacts the steps left behind: facts with spans, relations with their misreadings, strategies scored, the plan adapted to the case. Nothing here was generated for display."
 
-### 1:36 Third tab: What the verifier found. Click the necessity buttons in order: no notes, 1, 1 to 2, 1 to 3, 1 to 4
+### 1:41 Third tab: What the verifier found. Click the necessity buttons in order: no notes, 1, 1 to 2, 1 to 3, 1 to 4
 
 On camera: pause a second on each depth; the evidence list appears at the last one. Then the corruption list.
 
 VO: "Now the proof. The model is asked to pick the answer with the notes of step one only: undetermined. Steps one and two: undetermined. Three: undetermined. All four: the key, with quoted evidence that a judge in code re-checks against the notes. Then each step is corrupted the way a learner who fails there would, the rest re-run without the article, and the key is unreachable: four of four."
 
-### 2:02 Fourth tab: Single-shot control
+### 2:09 Fourth tab: Single-shot control
 
 On camera: the control's answer to "Could the key be found in the article's claims alone?"
 
 VO: "The control: same focus, same claims, one call, asked for an item requiring all four cognitive levels. Its key is something the article already states."
 
-### 2:11 Home page foot, then Items
+### 2:21 Home page foot, then Items
 
 On camera: the summed numbers; the bank with certified items and their decisions.
 
 VO: "On this server, six builds on five sources, including a physics preprint, a statute and a policy article: 21 of 30 path keys are not stated by the source and 20 of 30 need every step; for single-shot items, 9 of 30. The verifier judges structure; the reviewer judges the field."
 
-### 2:30 End card
+### 2:41 End card
 
 Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
 
@@ -62,11 +62,11 @@ VO: "What used to take weeks now takes minutes with Meta AI: an item compiled fr
 
 ## Capture notes
 
-- Read the numbers off the home page as they stand on recording day; the foot sums every build with rates on the server (six builds, 30 items, as of Nov 3), which is fewer than the README's ten because four early builds ran locally and were never uploaded. Update the 2:11 line if a build has been added or removed.
+- Read the numbers off the home page as they stand on recording day; the foot sums every build with rates on the server (six builds, 30 items, as of Nov 3), which is fewer than the README's ten because four early builds ran locally and were never uploaded. Update the 2:21 line if a build has been added or removed.
 - Keep the default zoom; the evidence lists are the point and must be legible. Cursor visible, no cursor effects.
 - The composer edit on the home page launches nothing; launches happen only from a source's build form.
 - Pause a second after each necessity click; the panel re-renders per depth.
-- Trim dead time in the edit rather than talking faster. If the cut runs over 3:00, drop the 1:25 walkthrough scroll to one screen rather than cutting the verifier section.
+- Trim dead time in the edit rather than talking faster. If the cut runs over 3:00, drop the 1:28 walkthrough scroll to one screen rather than cutting the verifier section.
 - Export at 1080p, upload to YouTube as unlisted, and test the link in a logged-out browser before submitting.
 
 ## Opening animation
@@ -92,3 +92,34 @@ node docs/video/render.cjs --cues=0,4.29,10.94,16.29,21.08,30.26,31.25
 ```
 
 (seven numbers: six starts and the end; the clip runs 0.6 s past the last). `--dur=` overrides the length, `--out=` the file, `--stills=3,10,17` writes PNGs of single moments to `docs/video/stills/` for checking. Cut to the home page footage on the last frame.
+
+## Take map (Nov 3 recording, raw, with pauses)
+
+Each line of the voice-over, by start time in `cogpath.m4a` (184.6 s). Measured at the pauses between lines and checked line by line against a rough offline transcription; accurate to about 0.1 s. Cut each pause to about 0.4 s and every time after it moves earlier by the amount cut. Keep the first 32 s as is: the animation is timed to those pauses.
+
+| shot | line begins | starts | voice-over runs |
+| --- | --- | --- | --- |
+| animation | "Writing a high-stakes board exam question" | 0:00 | 31.3 s (six lines, see above) |
+| composer | "The question is designed as a cognitive path" | 0:32 | 23.1 s |
+| | "You compose it, or the planner designs one per item." | 0:41 | |
+| | "Every step is a Muse Spark call" | 0:45 | |
+| sources, review | "Before any item exists" | 0:56 | 14.3 s |
+| | "Items rest on approved claims" | 1:06 | |
+| builds, item 1 | "This item ran recall four" | 1:11 | 15.9 s |
+| | "The case is one the article does not cover" | 1:18 | |
+| | "Each wrong option is tagged" | 1:23 | |
+| walkthrough | "These are the artifacts the steps left behind" | 1:28 | 11.9 s |
+| | "Nothing here was generated for display." | 1:38 | |
+| verifier | "Now the proof." | 1:41 | 28.1 s |
+| | "The model is asked to pick the answer" | 1:43 | |
+| | "Steps one and two: undetermined." | 1:49 | |
+| | "Three: undetermined." | 1:52 | |
+| | "All four: the key" | 1:54 | |
+| | "Then each step is corrupted" | 2:00 | |
+| control | "The control: same focus, same claims" | 2:09 | 10.9 s |
+| | "Its key is something the article already states." | 2:18 | |
+| home foot, items | "On this server, six builds on five sources" | 2:21 | 18.6 s |
+| | "The verifier judges structure" | 2:36 | |
+| end card | "What used to take weeks" | 2:41 | 23.5 s |
+| | "Now we can assess competency over recall" | 2:55 | |
+| | "cogpath, live at cogpath.org" | 2:59 | ends 3:04 |
