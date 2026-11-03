@@ -99,7 +99,7 @@ Each line of the voice-over, by start time in `cogpath.m4a` (184.6 s). Measured 
 
 | shot | line begins | starts | voice-over runs |
 | --- | --- | --- | --- |
-| animation | "Writing a high-stakes board exam question" | 0:00 | 31.3 s (six lines, see above) |
+| animation | "Writing a high-stakes board exam question" | 0:00 | 31.9 s (six lines, see above) |
 | composer | "The question is designed as a cognitive path" | 0:32 | 23.1 s |
 | | "You compose it, or the planner designs one per item." | 0:41 | |
 | | "Every step is a Muse Spark call" | 0:45 | |
