@@ -123,3 +123,33 @@ Each line of the voice-over, by start time in `cogpath.m4a` (184.6 s). Measured 
 | end card | "What used to take weeks" | 2:41 | 23.5 s |
 | | "Now we can assess competency over recall" | 2:55 | |
 | | "cogpath, live at cogpath.org" | 2:59 | ends 3:04 |
+
+## Screen grabs by line (raw take times)
+
+All 21 grabs (`cogpath-screens.zip`, 1920x1080) mapped to the voice-over. Start and end are in the raw take; cut points inside a line are at the breaths between its phrases. Use each as the frame to reach in the live capture, or as the still if a live take fails.
+
+| from | to | grab | voice-over |
+| --- | --- | --- | --- |
+| 0:00.0 | 0:31.9 | `intro.mp4` | the six animation lines |
+| 0:31.9 | 0:56.0 | `01-home-composer` | "The question is designed as a cognitive path" through "prefixes cached." (live: pick the preset, switch the kind) |
+| 0:56.0 | 0:59.6 | `04-sources` | "Before any item exists, the article becomes claims:" |
+| 0:59.6 | 1:02.7 | `05-review-cl1` | "verbatim spans, located in the PDF," |
+| 1:02.7 | 1:10.3 | `06-review-cl4` | "audited by a second pass, certified by a person. Items rest on approved claims…" |
+| 1:10.3 | 1:11.3 | `03-builds-list` | the pause before the next line (open the GCA Oct 28 build) |
+| 1:11.3 | 1:23.2 | `07-item1-case` | "This item ran recall four…" and "The case is one the article does not cover…" |
+| 1:23.2 | 1:27.9 | `08-item1-options-certified` | "Each wrong option is tagged with the step a learner who chose it failed at." |
+| 1:27.9 | 1:32.2 | `09-walk-recall` | "These are the artifacts the steps left behind: facts with spans," |
+| 1:32.2 | 1:34.1 | `10-walk-analyze` | "relations with their misreadings," |
+| 1:34.1 | 1:37.8 | `11-walk-evaluate-synthesize` | "strategies scored, the plan adapted to the case." |
+| 1:37.8 | 1:40.7 | `12-walk-distractors-key` | "Nothing here was generated for display." |
+| 1:40.7 | 1:42.6 | `13-verifier-no-notes` | "Now the proof." |
+| 1:42.6 | 1:48.6 | `14-verifier-steps1-1` | "The model is asked to pick the answer with the notes of step one only: undetermined." |
+| 1:48.6 | 1:51.6 | `15-verifier-steps1-2` | "Steps one and two: undetermined." |
+| 1:51.6 | 1:53.9 | `16-verifier-steps1-3` | "Three: undetermined." |
+| 1:53.9 | 2:00.1 | `17-verifier-steps1-4` | "All four: the key, with quoted evidence…" |
+| 2:00.1 | 2:09.4 | `18-verifier-evidence-corruption` | "Then each step is corrupted… four of four." |
+| 2:09.4 | 2:17.7 | `19-control-item` | "The control: same focus, same claims, one call…" |
+| 2:17.7 | 2:21.2 | `20-control-checks` | "Its key is something the article already states." |
+| 2:21.2 | 2:36.3 | `02-home-numbers` | "On this server, six builds on five sources… 9 of 30." |
+| 2:36.3 | 2:40.6 | `21-items-bank` | "The verifier judges structure; the reviewer judges the field." |
+| 2:40.6 | 3:04.0 | end card (text only) | "What used to take weeks…" to "built on the Meta Model API." |
