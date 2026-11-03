@@ -52,13 +52,13 @@ Firebase Hosting serves the React console; `/api/**` rewrites to a Cloud Run ser
 
 ## Results
 
-Nine builds, six sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act, a policy article on welfare fraud-detection algorithms), 45 path items and 45 single-shot controls:
+Ten builds, six sources (a mortality survey, a narrative review, a cohort study, a theoretical-physics preprint, the Patent Act, a policy article on welfare fraud-detection algorithms), 50 path items and 50 single-shot controls:
 
 | | path items | medical articles only | single-shot controls |
 |---|---|---|---|
-| key not stated by the source | 37/45 | 29/30 | 13/45 |
-| key needs the full path | 32/45 | 24/30 | n/a |
-| all six checks | 14/45 | 11/30 | n/a |
+| key not stated by the source | 40/50 | 32/35 | 15/50 |
+| key needs the full path | 37/50 | 29/35 | n/a |
+| all six checks | 15/50 | 12/35 | n/a |
 
 The physics preprint behaved like the medical articles (4 of 5 keys not stated, 3 of 5 needing the full path). The policy article, built with the clinical management path composed onto every item (recall, causal analysis, evaluate on efficacy and safety, synthesize), gave the best build so far: 4 of 5 not stated, 4 of 5 full path, 3 of 5 passing all six checks. The statute did not: every key failed digestRecall, because a statute's claims are rules and applying a rule to a scenario is, to that check, recall. The verifier reported it rather than passing it.
 

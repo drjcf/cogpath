@@ -62,7 +62,7 @@ VO: "What used to take weeks now takes minutes with Meta AI: an item compiled fr
 
 ## Capture notes
 
-- Read the numbers off the home page as they stand on recording day; the foot sums every build with rates on the server (six builds, 30 items, as of Nov 3), which is fewer than the README's nine because four early builds ran locally and were never uploaded. Update the 2:11 line if a build has been added or removed.
+- Read the numbers off the home page as they stand on recording day; the foot sums every build with rates on the server (six builds, 30 items, as of Nov 3), which is fewer than the README's ten because four early builds ran locally and were never uploaded. Update the 2:11 line if a build has been added or removed.
 - Keep the default zoom; the evidence lists are the point and must be legible. Cursor visible, no cursor effects.
 - The composer edit on the home page launches nothing; launches happen only from a source's build form.
 - Pause a second after each necessity click; the panel re-renders per depth.

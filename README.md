@@ -206,22 +206,25 @@ samples/          de-identified teaching summary used by the tests
 
 ## Results
 
-Nine builds on six sources, each 5 path items with a single-shot control on the same focus, `--deep --baseline`, verifier at the 0.5.1 rules (the three earliest builds were re-scored with `rescore`, which re-judges stored picks and makes no new calls). Sources: an ABCS survey of gluteal fat grafting mortality (56 approved claims), a PRS review of perioperative nutrition (47), a cohort study of new arterial lesions in giant cell arteritis (40), and, outside medicine, a theoretical-physics preprint on a QFT information protocol for charged black holes, the Patent Act (Title 35, United States Code), and a policy article on fraud-detection algorithms in welfare administration.
+Ten builds on six sources, each 5 path items with a single-shot control on the same focus, `--deep --baseline`, verifier at the 0.5.1 rules (the three earliest builds were re-scored with `rescore`, which re-judges stored picks and makes no new calls). Sources: an ABCS survey of gluteal fat grafting mortality (56 approved claims), a PRS review of perioperative nutrition (47), a cohort study of new arterial lesions in giant cell arteritis (40), and, outside medicine, a theoretical-physics preprint on a QFT information protocol for charged black holes, the Patent Act (Title 35, United States Code), and a policy article on fraud-detection algorithms in welfare administration.
 
-| build | source | path: necessity k4 | path: digestRecall | path: all checks | single-shot: digestRecall | generation tokens in (cached) / out | min |
-|---|---|---|---|---|---|---|---|
-| mvrbxja9 | fat grafting survey | 5/5 | 5/5 | 3/5 | 3/5 | 173k (60k) / 179k | 26 |
-| mvrcuuf8 | perioperative nutrition review | 3/5 | 5/5 | 1/5 | 0/5 | 151k (68k) / 148k | 22 |
-| mvrdng86 | GCA arterial lesions cohort (0.5.0) | 5/5 | 5/5 | 1/5 | 1/5 | 143k (60k) / 157k | 24 |
-| mvrvace5 | GCA arterial lesions cohort (0.5.1) | 4/5 | 4/5 | 3/5 | 2/5 | 144k (64k) / 139k | 31 |
-| cloud, Oct 28 | GCA arterial lesions cohort, re-read (41 claims), first build on Cloud Run | 4/5 | 5/5 | 2/5 | 1/5 | 148k (67k) / 141k | 28 |
-| mvshukq7 | perioperative nutrition review, two composed paths | 3/5 | 5/5 | 1/5 | 1/5 | | |
-| mvswxj1o | QFT information protocol for charged black holes (physics preprint) | 3/5 | 4/5 | 0/5 | 1/5 | | |
-| mvsx8z6c | Patent Act, Title 35 U.S.C. | 1/5 | 0/5 | 0/5 | 2/5 | | |
-| mvtr1b8b | welfare fraud-detection algorithms (policy article), one composed path | 4/5 | 4/5 | 3/5 | 2/5 | | |
-| **total** | | **32/45** | **37/45** | **14/45** | **13/45** | | |
+| build | source | path: necessity k4 | path: digestRecall | path: all checks | single-shot: digestRecall | generation tokens in (cached) / out | min | on cogpath.org |
+|---|---|---|---|---|---|---|---|---|
+| mvrbxja9 | fat grafting survey | 5/5 | 5/5 | 3/5 | 3/5 | 173k (60k) / 179k | 26 | no |
+| mvrcuuf8 | perioperative nutrition review | 3/5 | 5/5 | 1/5 | 0/5 | 151k (68k) / 148k | 22 | no |
+| mvrdng86 | GCA arterial lesions cohort (0.5.0) | 5/5 | 5/5 | 1/5 | 1/5 | 143k (60k) / 157k | 24 | no |
+| mvrvace5 | GCA arterial lesions cohort (0.5.1) | 4/5 | 4/5 | 3/5 | 2/5 | 144k (64k) / 139k | 31 | no |
+| mvs3ldzj (cloud, Oct 28) | GCA arterial lesions cohort, re-read (41 claims), first build on Cloud Run | 4/5 | 5/5 | 2/5 | 1/5 | 148k (67k) / 141k | 28 | yes |
+| mvshukq7 | perioperative nutrition review, two composed paths | 3/5 | 5/5 | 1/5 | 1/5 | | | yes |
+| mvswxj1o | QFT information protocol for charged black holes (physics preprint) | 3/5 | 4/5 | 0/5 | 1/5 | | | yes |
+| mvsx8z6c | Patent Act, Title 35 U.S.C. | 1/5 | 0/5 | 0/5 | 2/5 | | | yes |
+| mvtr1b8b | welfare fraud-detection algorithms (policy article), one composed path | 4/5 | 4/5 | 3/5 | 2/5 | | | yes |
+| mvu6pj76 | GCA arterial lesions cohort, two composed paths (management, evidence appraisal), Oct 29 | 5/5 | 3/5 | 1/5 | 2/5 | 143k (25k) / 162k | 49 | yes |
+| **total** | | **37/50** | **40/50** | **15/50** | **15/50** | | | |
 
-digestRecall is the one check both arms take: is the key something the source's claims already state? 37 of 45 path keys are not (29 of 30 on the medical articles); 32 of 45 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 32 of 45 path items (24 of 30 on the medical articles); the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
+digestRecall is the one check both arms take: is the key something the source's claims already state? 40 of 50 path keys are not (32 of 35 on the medical articles); 35 of 50 single-shot keys are, even though the single-shot prompt asks for an item that "requires recall, analysis, evaluation, and synthesis". Necessity (the key becomes determinable only with the last step's artifact) holds for 37 of 50 path items (29 of 35 on the medical articles); the misses are items whose evaluate step already pinned the answer (a thin synthesis), whose analysis alone did, or whose recall alone did.
+
+Six of the ten builds are on the live server (last column); the first four ran locally during development, so the figures the home page sums (21 of 30 path keys not stated, 9 of 30 single-shot, 20 of 30 needing every step, across six builds) are a subset of this table. The tenth build, mvu6pj76, re-ran the cohort article with two composed paths, a management path (`evaluate(efficacy, safety) > synthesize(management plan)`) and an evidence-appraisal path (`evaluate(validity, generalizability, risks) > synthesize(evidence appraisal)`), both opening `recall(4) > analyze(causal)`: all five items needed the full path, 3 of 5 keys were not stated and 1 of 5 passed all six checks.
 
 Three builds outside medicine. On the physics preprint (planner mode) the path items behaved as on the medical articles: 4 of 5 keys not stated by the source, 3 of 5 needing the full path, and what failed was cover on one item and distractor mapping on the others. On the policy article, with one composed path on every item (`recall(5) > analyze(causal) > evaluate(efficacy, safety) > synthesize`, the management preset with the synthesis form left open), 4 of 5 keys were not stated, 4 of 5 needed the full path and 3 of 5 passed all six checks, the best build so far; the criteria written for clinical management transferred to administrative decisions without change. On the Patent Act (planner mode) the verifier failed every item on digestRecall. A statute's claims are rules, and an item that applies a rule to a scenario has a key the digest already states once the stem supplies the scenario; sourceRecall, which sees only recommendation claims, passed trivially because a statute makes none. The framework was built for sources that report findings, and on a source that states rules the verifier reports that rather than passing it.
 
