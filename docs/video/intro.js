@@ -71,6 +71,7 @@ function itemCard(par, keyRow = -1) {
 
 async function main() {
   await Promise.all(['400 20px "IBM Plex Sans"', '500 20px "IBM Plex Sans"', '600 20px "IBM Plex Sans"', '400 20px "IBM Plex Mono"'].map((f) => document.fonts.load(f)));
+  await new Promise((res, rej) => { const im = new Image(); im.onload = res; im.onerror = () => rej(new Error('logo not found: docs/video/brand/edai-lockup-mono-navy.svg')); im.src = 'brand/edai-lockup-mono-navy.svg'; });
   S('rect', { width: 1920, height: 1080, fill: C.paper });
 
   // ---- old flow ----
@@ -118,9 +119,10 @@ async function main() {
 
   // ---- EdAI ----
   const edai = G();
-  const edName = TX('EdAI Systems', { x: 960, y: 490, 'font-size': 120, 'font-weight': 600, style: 'letter-spacing:-0.01em' }, edai);
-  const edRule = S('path', { d: 'M 700 540 H 1220', stroke: C.ink, 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, edai);
-  const edSub = TX('assessment items for credentialing exams', { x: 960, y: 630, 'font-size': 44, fill: C.muted }, edai);
+  // The supplied lockup (820x300 viewBox, content centred near x 385, y 149) at 1.8x, centred on the stage.
+  S('image', { href: 'brand/edai-lockup-mono-navy.svg', x: 267, y: 172, width: 1476, height: 540 }, edai);
+  const edRule = S('path', { d: 'M 700 610 H 1220', stroke: C.ink, 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, edai);
+  const edSub = TX('assessment items for credentialing exams', { x: 960, y: 705, 'font-size': 44, fill: C.muted }, edai);
 
   // ---- the path ----
   const FS = 36, steps = [['Recall', '4', 'recall', 'facts and spans'], ['Analyze', 'causal', 'analyze', 'relations'], ['Evaluate', 'efficacy, safety', 'evaluate', 'strategies scored'], ['Synthesize', 'management plan', 'synthesize', 'plan adapted to the case']];

@@ -56,7 +56,7 @@ VO: "On this server, six builds on five sources, including a physics preprint, a
 
 ### 2:41 End card
 
-Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
+Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3, with the EdAI Systems lockup. Built: `docs/video/endcard.png` (1920x1080; `node docs/video/endcard.cjs` re-renders it). Hold it from the first line of this section to the end.
 
 VO: "What used to take weeks now takes minutes with Meta AI: an item compiled from an executed cognitive path, verified against the source and a single-shot control, transparent at every step, and certified by a person who judges the field. Now we can assess competency over recall, and show the proof in the item. cogpath, live at cogpath.org, built on the Meta Model API."
 
@@ -71,7 +71,7 @@ VO: "What used to take weeks now takes minutes with Meta AI: an item compiled fr
 
 ## Opening animation
 
-`docs/video/intro.html` draws the opening as a pure function of time (SVG, the console's tokens and fonts); `docs/video/render.cjs` seeks it frame by frame and encodes `intro.mp4` (1920x1080, 30 fps, 31.9 s). It is a generic rendering of how an item is written and reviewed (writer, committee, revision loop); if the board's workflow differs, edit the station labels in `intro.js`.
+`docs/video/intro.html` draws the opening as a pure function of time (SVG, the console's tokens and fonts); `docs/video/render.cjs` seeks it frame by frame and encodes `intro.mp4` (1920x1080, 30 fps, 31.9 s). It is a generic rendering of how an item is written and reviewed (writer, committee, revision loop); if the board's workflow differs, edit the station labels in `intro.js`. The EdAI Systems scene and the end card use the supplied lockup, `docs/video/brand/edai-lockup-mono-navy.svg` (transparent, for light backgrounds).
 
 Beats, by the start of each voice-over sentence (the default cues are measured on the Nov 3 recorded take, in seconds):
 
@@ -152,4 +152,4 @@ All 21 grabs (`cogpath-screens.zip`, 1920x1080) mapped to the voice-over. Start 
 | 2:17.7 | 2:21.2 | `20-control-checks` | "Its key is something the article already states." |
 | 2:21.2 | 2:36.3 | `02-home-numbers` | "On this server, six builds on five sources… 9 of 30." |
 | 2:36.3 | 2:40.6 | `21-items-bank` | "The verifier judges structure; the reviewer judges the field." |
-| 2:40.6 | 3:04.0 | end card (text only) | "What used to take weeks…" to "built on the Meta Model API." |
+| 2:40.6 | 3:04.0 | `endcard.png` | "What used to take weeks…" to "built on the Meta Model API." |
