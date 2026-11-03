@@ -1,6 +1,6 @@
 # Demo video: 3 minutes, on the live app
 
-The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 459 words: at 165 words a minute it runs about 2:53, at 150 about 3:07, over the cap. Record at a brisk, even pace, and if the take runs long cut the 1:25 walkthrough shot first (29 words); the times below assume 165. The first 34 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
+The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 459 words: at 165 words a minute it runs about 2:53, at 150 about 3:07, over the cap. Record at a brisk, even pace, and if the take runs long cut the 1:25 walkthrough shot first (29 words); the times below assume 165. The first 32 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
 
 Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab at item 1, the Review console of that article open in a third tab, the Items bank with at least the certified items from that build. Navigation only on camera: no decisions, no approvals, no launches.
 
@@ -12,7 +12,7 @@ On screen: the old flow (source article, item writer, review committee, revision
 
 VO: "Writing a high-stakes board exam question is slow, expert work. An item that assesses competency rather than memory takes a specialist hours to draft and a committee weeks to review, and a model asked to help writes questions whose answers the source already states. At EdAI Systems we set out to change that process with AI. The goal: an algorithmic process that builds exam questions well beyond simple recall, and makes every step transparent and easy to verify. This is cogpath."
 
-### 0:34 Home page, composer: pick the Evidence appraisal preset, switch the analysis kind to mechanism
+### 0:32 Home page, composer: pick the Evidence appraisal preset, switch the analysis kind to mechanism
 
 On camera: cut in on the composer already visible; the glyph and the grammar text follow the change.
 
@@ -71,24 +71,24 @@ VO: "What used to take weeks now takes minutes with Meta AI: an item compiled fr
 
 ## Opening animation
 
-`docs/video/intro.html` draws the opening as a pure function of time (SVG, the console's tokens and fonts); `docs/video/render.cjs` seeks it frame by frame and encodes `intro.mp4` (1920x1080, 30 fps, 34.3 s). It is a generic rendering of how an item is written and reviewed (writer, committee, revision loop); if the board's workflow differs, edit the station labels in `intro.js`.
+`docs/video/intro.html` draws the opening as a pure function of time (SVG, the console's tokens and fonts); `docs/video/render.cjs` seeks it frame by frame and encodes `intro.mp4` (1920x1080, 30 fps, 31.9 s). It is a generic rendering of how an item is written and reviewed (writer, committee, revision loop); if the board's workflow differs, edit the station labels in `intro.js`.
 
-Beats, by the start of each voice-over sentence (the default cue, in seconds):
+Beats, by the start of each voice-over sentence (the default cues are measured on the Nov 3 recorded take, in seconds):
 
 | cue | sentence begins | on screen |
 | --- | --- | --- |
 | 0.0 | "Writing a high-stakes board exam question" | source article, item writer, a draft card filling in |
-| 4.2 | "An item that assesses competency" | hours (clock), committee, revision loop, weeks filling, approved |
-| 12.3 | "and a model asked to help" | the old flow dims; a model given one prompt; its key traced to a highlighted sentence in the source |
-| 18.2 | "At EdAI Systems we set out" | EdAI Systems, assessment items for credentialing exams |
-| 23.3 | "The goal: an algorithmic process" | the path glyph builds, beyond simple recall, an artifact and a check per step |
-| 32.5 | "This is cogpath." | cogpath wordmark, compact glyph, cogpath.org |
+| 4.29 | "An item that assesses competency" | hours (clock), committee, revision loop, weeks filling, approved |
+| 10.94 | "and a model asked to help" | the old flow dims; a model given one prompt; its key traced to a highlighted sentence in the source |
+| 16.29 | "At EdAI Systems we set out" | EdAI Systems, assessment items for credentialing exams |
+| 21.08 | "The goal: an algorithmic process" | the path glyph builds, beyond simple recall, an artifact and a check per step |
+| 30.26 | "This is cogpath." | cogpath wordmark, compact glyph, cogpath.org |
 
 Re-time it to the recorded voice-over: note the second at which each of the six sentences starts and where the last one ends, then
 
 ```
 npm install --prefix web
-node docs/video/render.cjs --cues=0,4.4,12.9,18.6,23.8,33.0,34.2
+node docs/video/render.cjs --cues=0,4.29,10.94,16.29,21.08,30.26,31.25
 ```
 
 (seven numbers: six starts and the end; the clip runs 0.6 s past the last). `--dur=` overrides the length, `--out=` the file, `--stills=3,10,17` writes PNGs of single moments to `docs/video/stills/` for checking. Cut to the home page footage on the last frame.

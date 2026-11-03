@@ -12,7 +12,7 @@ const C = {
   pass: '#237a57', passBg: '#e6f3ec', fail: '#b23a2e', hl: 'rgba(255,214,0,.45)', keyBg: '#eceff2',
 };
 const query = new URLSearchParams(location.search);
-const cues = (query.get('cues') || '0,4.2,12.3,18.2,23.3,32.5,33.7').split(',').map(Number);
+const cues = (query.get('cues') || '0,4.29,10.94,16.29,21.08,30.26,31.25').split(',').map(Number);
 const [S1, S2, S3, S4, S5, S6, SEND] = cues;
 window.DURATION = Number(query.get('dur')) || SEND + 0.6;
 

@@ -2,7 +2,7 @@
 /*
  * Renders docs/video/intro.html to an MP4 (H.264, 1920x1080) by seeking the timeline frame by frame.
  *
- *   node docs/video/render.cjs [--cues=0,4.2,12.3,18.2,23.3,32.5,33.7] [--dur=34.3] [--fps=30] [--out=docs/video/intro.mp4]
+ *   node docs/video/render.cjs [--cues=0,4.29,10.94,16.29,21.08,30.26,31.25] [--dur=31.85] [--fps=30] [--out=docs/video/intro.mp4]
  *   node docs/video/render.cjs --stills=2,8,15 [--cues=...]      writes PNGs to docs/video/stills/ and exits
  *
  * Needs: `npm install` in web/ (fonts), playwright with its Chromium, ffmpeg on PATH.
