@@ -239,3 +239,7 @@ Development history on the fat grafting survey, same verifier rules applied retr
 1. DAG paths (two recalls feeding one analysis) with branch-ablation necessity, step-qualified ids and an option budget; `compare(sourceB)`, `apply`, `critique` as new ops the composer picks up from the registry.
 2. Streamed reasoning summaries per step for the live trace.
 3. Export formats beyond JSON (QTI, CSV) and a per-board item template.
+
+## License
+
+MIT, see `LICENSE`.
