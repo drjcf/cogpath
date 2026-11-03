@@ -1,6 +1,6 @@
 # Demo video: 3 minutes, on the live app
 
-The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 446 words: at 165 words a minute it runs about 2:49, at 150 about 3:02, over the cap. Record at a brisk, even pace, and if the take runs long cut the 1:25 walkthrough shot first (29 words); the times below assume 165. The first 34 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
+The video is the primary judging artifact (rubric: Impact 30, Meta AI tooling 25, Demo 25, Technical depth 20). Hard cap 3:00. The script is 459 words: at 165 words a minute it runs about 2:53, at 150 about 3:07, over the cap. Record at a brisk, even pace, and if the take runs long cut the 1:25 walkthrough shot first (29 words); the times below assume 165. The first 34 seconds are the opening animation (`docs/video/intro.mp4`, see the last section); the rest is screen capture of https://cogpath.org at 1400 wide, signed in. Voice-over recorded separately and laid over both. No music, no slides except the end card, captions on.
 
 Prepare before recording: the Oct 28 GCA build (41 claims) open in a second tab at item 1, the Review console of that article open in a third tab, the Items bank with at least the certified items from that build. Navigation only on camera: no decisions, no approvals, no launches.
 
@@ -52,9 +52,9 @@ VO: "The control: same focus, same claims, one call, asked for an item requiring
 
 On camera: the summed numbers; the bank with certified items and their decisions.
 
-VO: "Nine builds, six sources, including a physics preprint, a statute and a policy article: 37 of 45 path keys are not stated by the source; single-shot, 13 of 45. The verifier judges structure; the reviewer judges the field."
+VO: "On this server, six builds on five sources, including a physics preprint, a statute and a policy article: 21 of 30 path keys are not stated by the source and 20 of 30 need every step; for single-shot items, 9 of 30. The verifier judges structure; the reviewer judges the field."
 
-### 2:25 End card
+### 2:30 End card
 
 Text on screen: cogpath.org · github.com/drjcf/cogpath · Meta Model API, Muse Spark 1.3.
 
@@ -62,7 +62,7 @@ VO: "What used to take weeks now takes minutes with Meta AI: an item compiled fr
 
 ## Capture notes
 
-- Read the numbers off the home page as they stand on recording day; the foot sums every build in the store. Update the 2:32 line if a build has been added.
+- Read the numbers off the home page as they stand on recording day; the foot sums every build with rates on the server (six builds, 30 items, as of Nov 3), which is fewer than the README's nine because four early builds ran locally and were never uploaded. Update the 2:11 line if a build has been added or removed.
 - Keep the default zoom; the evidence lists are the point and must be legible. Cursor visible, no cursor effects.
 - The composer edit on the home page launches nothing; launches happen only from a source's build form.
 - Pause a second after each necessity click; the panel re-renders per depth.
