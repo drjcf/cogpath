@@ -1,7 +1,11 @@
+import fs0 from 'node:fs';
+import os0 from 'node:os';
 process.env.MOCK_LLM = '1';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-process.env.COGPATH_DATA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../runs');
+// A private data directory: these tests ingest, approve and delete the sample source, which must never touch real work under runs/.
+process.env.COGPATH_DATA = fs0.mkdtempSync(path.join(os0.tmpdir(), 'cogpath-test-'));
+process.on('exit', () => fs0.rmSync(process.env.COGPATH_DATA, { recursive: true, force: true }));
 const SAMPLE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../samples/retrobulbar-hematoma.md');
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
