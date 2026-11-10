@@ -429,3 +429,9 @@ test('an item whose assembly ended with unresolved problems cannot pass, in eith
   assert.equal(mv.summary.checks.assembly, false); assert.equal(mv.summary.pass, false);
   assert.equal((await verifyItem({ trace: mcq, source, model: 'mock' })).assembly, null);
 });
+
+test('a digest too small for the requested item count is refused before any call, with the count it supports', async () => {
+  const { planItems } = await import('../core/plan.js');
+  const claims = [...Array.from({ length: 7 }, (_, i) => ({ id: `cl${i + 1}`, type: 'result', text: 'x' })), ...Array.from({ length: 15 }, (_, i) => ({ id: `cl${i + 8}`, type: 'recommendation', text: 'y' }))];
+  await assert.rejects(planItems({ source: { digest: { claims }, parts: [] }, n: 5, model: 'mock' }), /7 premise claims .* at most 2 items, not 5/);
+});

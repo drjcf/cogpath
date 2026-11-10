@@ -77,7 +77,7 @@ ${PATH_GRAMMAR}
 ${assigned ? `\nThe path of each item is FIXED by the item designer; copy it exactly into the plan's path field and choose a focus and claims that suit it:\n${assigned.map((p, i) => `- item${i + 1}: ${p}`).join('\n')}` : '\nVary analyze kinds and evaluate criteria across items so the items differ in the thinking they demand, not only in the facts they rest on.'}
 
 Rules:
-- Reserved claims are DISJOINT across plans: no claim id appears in two plans. Reserve 3 to 6 per item from the PREMISE claims (result, interpretation, limitation, method, background; ${Object.entries(byType).map(([k, v]) => `${v} ${k}`).join(', ')} available). Never reserve a recommendation claim: the recall step is forbidden from using recommendations, so a reserved one is wasted; recommendations stay visible to every item as shared context.
+- Reserved claims are DISJOINT across plans: no claim id appears in two plans. Budget them before writing: ${claims.filter((c) => c.type !== 'recommendation').length} premise claims for ${n} items, so at most ${Math.max(3, Math.min(6, Math.floor(claims.filter((c) => c.type !== 'recommendation').length / n)))} per item. Reserve 3 to 6 per item from the PREMISE claims (result, interpretation, limitation, method, background; ${Object.entries(byType).map(([k, v]) => `${v} ${k}`).join(', ')} available). Never reserve a recommendation claim: the recall step is forbidden from using recommendations, so a reserved one is wasted; recommendations stay visible to every item as shared context.
 - Focuses must be distinct decisions, not the same decision from different angles, and each focus is a decision DOMAIN, not a patient scenario (no ages, presentations, or requests): the synthesize step designs the specific case later, and a scenario in the focus pre-empts it.
 - Across the set, prefer decisions that the premises settle differently from how a learner who only knows the source's recommendations would answer; an item whose answer is simply one of the recommendations tests recall of the source, not reasoning.
 - Prefer items that a competent practitioner could get wrong by reasoning badly over items that only test whether a figure was remembered.
@@ -125,6 +125,10 @@ export async function planItems({ source, n, paths, pathHint, model, label = 'pl
   const claims = source.digest?.claims ?? [];
   if (!claims.length) throw new Error('planning needs a digest with claims');
   if (!paths?.length && pathHint) paths = [pathHint];
+  // Reserved claims are disjoint and each item needs at least 3 premise claims, so a small digest caps the item count. Refuse before any call.
+  const premises = claims.filter((c) => c.type !== 'recommendation').length;
+  const cap = Math.floor(premises / 3);
+  if (n > cap) throw new Error(`this digest has ${premises} premise claims (recommendations cannot be reserved); at 3 per item it supports at most ${cap} item${cap === 1 ? '' : 's'}, not ${n}. Ask for ${cap || 'fewer'} or use a larger source`);
   const instruction = planInstruction({ n, paths, claims });
   const attempts = [];
   let feedback = '';
