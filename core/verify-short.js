@@ -65,7 +65,7 @@ export function cueSchema(item) {
     elements: arr(obj({
       elementId: enm(item.rubric.map((e) => e.id)),
       cued: bool('true only if a complete, direct answer to the QUESTION, as worded, would be expected to show what this element requires'),
-      onePoint: bool('true only if the element states ONE point, so that an answer giving that point earns it; false if it needs two or more independent things (for example two reasons joined by "and", or a choice plus a comparison plus a reason) so that an answer giving only one of them would be marked not met'),
+      onePoint: bool('false ONLY if the element demands two or more INDEPENDENT findings, facts, or reasons, each of which a correct answer could give without the other (for example "because A and B", or three separate assertions in one sentence). A choice together with its single reason ("chooses X over Y because Z") is ONE point. A single named action, procedure, or diagnosis is ONE point however many words name it. A fact with its direct consequence is ONE point. When in doubt, true'),
       reason: str('One sentence: what in the question asks for it, or what a complete answer could leave out; for a compound element, the parts it joins'),
     }), 'One entry per element, in order'),
   }));
@@ -75,7 +75,7 @@ export async function checkCues({ item, model, label }) {
   const schema = cueSchema(item);
   const res = await complete({
     instructions: 'You judge an exam question and its rubric. An element is CUED when a complete, direct answer to the question as worded would be expected to show it. It is NOT CUED when a complete, correct answer could reasonably leave it out, for example when the question asks only what to do but the element needs the mechanism behind the problem, or the element needs a comparison with an alternative that the question never asks for. Judge only the wording of the question, not whether the element is true or whether the answer is right.',
-    parts: [part.text(scenario(item)), part.text(`RUBRIC ELEMENTS:\n${rubricText(item)}\n\nFor EACH element: (1) cued or not cued by the QUESTION as worded; (2) whether the element is ONE point or joins several independent points, so that an answer giving one of them would be marked not met.`)],
+    parts: [part.text(scenario(item)), part.text(`RUBRIC ELEMENTS:\n${rubricText(item)}\n\nFor EACH element: (1) cued or not cued by the QUESTION as worded; (2) whether the element is ONE point, or demands several INDEPENDENT findings, facts, or reasons so that an answer giving one of them would be marked not met. A choice with its one reason, or one named procedure, is one point.`)],
     schema, schemaName: 'cues', effort: 'low', model, label, maxOutputTokens: 4096,
     mock: () => ({ elements: item.rubric.map((e) => ({ elementId: e.id, cued: true, onePoint: true, reason: '[MOCK] asked for' })) }),
   });
