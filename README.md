@@ -42,6 +42,24 @@ recall(3) > analyze(contrast, relations=2) > evaluate(efficacy, safety) > synthe
 
 Each op declares what it `requires` (analyze needs recall, evaluate needs analyze, synthesize needs evaluate); the parser rejects paths that violate this. Ops can repeat (`analyze(causal) > analyze(contrast)` gives ids `analyze`, `analyze2`). JSON form: `[{ op, params }, …]`.
 
+### Branched paths (a DAG)
+
+A path is a directed acyclic graph of steps. A chain is the simple case and reads as before; branches let two lines of reasoning run separately and meet at a later step.
+
+```
+r1: recall(2) > a: analyze(causal); r2: recall(2); @a, @r2 > evaluate(efficacy, safety) > synthesize(management plan)
+```
+
+- `>` links the steps of a chain; `;` starts another chain; `label:` names a step (the default name is the op, then `op2`, `op3` for repeats; a label cannot be an op name).
+- `@x, @y >` at the head of a chain makes its first step depend on steps `x` and `y`. A chain with no `@` head and no earlier chain to join begins a new root.
+- A step sees only the artifacts of its ancestors, so a branch cannot lean on a sibling. Steps with no unfinished dependency run together.
+- Exactly one step is terminal (nothing depends on it), and it is last; the parser says which steps are loose ends and how to join them. A step's `requires` is satisfied by any ancestor. JSON form: `{ op, params, id?, after? }`, where `after` lists the step ids it depends on (omit it to follow the entry before).
+- Several recall steps split the item's reserved claims between them in turn, and their facts are numbered apart (`c1 c2`, then `c3 c4`), as are analyze relations and evaluate options.
+- Stored paths from before DAGs have no `deps` and are read as a chain.
+- A multiple-choice item carries one distractor per step and four to six options, so an MCQ path is limited to five steps. The limit is checked before any call.
+
+Verification follows the graph. Path necessity asks, for each step, whether the key can still be found from the notes of every step except that step **and the steps that depend on it** (it must not be), and once with all notes (it must). Distractor mapping corrupts one step and re-runs only the steps that depend on it. On a chain both reduce to what they were.
+
 `assemble` always runs last. Distractor policy **one-per-step**: one distractor tagged `failsAt=<step>` per path step, padded with extra terminal-step distractors so every item has at least 4 options. Letters are assigned by a seeded shuffle (`--seed`).
 
 The stem is a vignette, not a literature summary: one specific case as a learner would meet it, embedding the synthesize step's case constraint as a concrete finding (copied into `constraintSpan`, checked verbatim against the stem). It states none of the recalled facts or figures; the assembler rejects a stem that restates a recall concept or carries its numbers (`4-fold`, `12,172`, `39%`). The learner must bring the facts, see the constraint, and adapt the principles; a learner who only knows the generic recommendation lands on the synthesize-tagged distractor. Options must be homogeneous (same form, at most 3 clauses, lengths within 25%); a key that is the longest by more than 20% is rejected as a length cue.
@@ -54,10 +72,10 @@ The stem is a vignette, not a literature summary: one specific case as a learner
 | coverTheOptions | free answer from stem + lead-in only, then mapped to the closest option; must map to the key | 2 |
 | sourceRecall (digest mode) | the picker sees only the digest's `recommendation` claims and the item; the key must NOT be fully entailed by them, otherwise the item is recall of the source's conclusions whatever path built it | 1 |
 | digestRecall (digest mode) | the picker sees every claim of the digest and the item; the key must NOT be fully entailed by the source's claims alone. This is the check both arms share: a single-shot item has no step artifacts for necessity, but it can be asked the same question, is the key something the source states | 1 |
-| pathNecessity | with notes from steps 1..k only (no source, outside knowledge forbidden, `UNDETERMINED` allowed), the key must become determinable only at k = n | n+1 |
+| pathNecessity | with notes from every step except one and its dependents (no source, outside knowledge forbidden, `UNDETERMINED` allowed), the key must not be determinable; with all notes it must be. On a chain this is notes from steps 1..k | n+1 |
 | distractorMapping (`--deep`) | corrupt artifact k the way a learner who fails at step k would, re-run the downstream steps, pick an option; expect the distractor tagged `failsAt=k` | ≈ n + n(n-1)/2 + n |
 
-`pathNecessity.determinedAt < n` means the later steps are decorative: the item is answerable without them. That number, across many items, is the headline metric for the framework: single-shot items vs path-compiled items.
+`pathNecessity.pass` false means a step is decorative: the item is answerable without it (on a chain, `determinedAt < n`). That number, across many items, is the headline metric for the framework: single-shot items vs path-compiled items.
 
 The necessity check is a proxy. A model told to use only the notes may still leak background knowledge; the `UNDETERMINED` option and the no-source setup reduce that, and the mapping check cross-validates it. Say so when presenting results.
 
@@ -179,7 +197,8 @@ Candidates: `apply(scenario)`, `critique`, `predict`, `compare(sourceB)`.
 
 ```
 core/ops/         recall, analyze, evaluate, synthesize, assemble (+ registry)
-core/path.js      DSL parser / normalizer
+core/path.js      DSL parser / normalizer (chains and branches)
+core/graph.js     dependencies, ancestors, descendants of a path
 core/schema.js    strict-schema helpers, validator, Claude request form (toClaudeSchema)
 core/llm.js       Claude API client (Messages API, structured outputs, PDF, caching, mock)
 core/source.js    pdf / md / txt / inline loading; withDigest() re-bases a source on its digest

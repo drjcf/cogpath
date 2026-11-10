@@ -15,7 +15,7 @@ export function coverageMap(digest, items) {
   const used = new Map();
   for (const it of items) {
     const ids = new Set();
-    for (const c of it.trace?.artifacts?.recall?.concepts ?? []) for (const id of c.claims ?? []) ids.add(id);
+    for (const st of Object.values(it.trace?.artifacts ?? {})) for (const c of st?.concepts ?? []) for (const id of c.claims ?? []) ids.add(id);
     for (const st of Object.values(it.trace?.artifacts ?? {})) for (const id of st?.caseConstraint?.derivedFrom ?? []) if (/^cl\d+$/.test(id)) ids.add(id);
     used.set(it.plan.id, [...ids]);
   }

@@ -4,6 +4,7 @@
  */
 import { obj, arr, str, int, assertStrict } from '../schema.js';
 import { ACTION_LEAK } from '../textmatch.js';
+import { branchShare } from '../graph.js';
 
 const schema = assertStrict(obj({
   concepts: arr(obj({
@@ -18,12 +19,17 @@ const schema = assertStrict(obj({
 /** Phrases that mark a statement as prescriptive (a decision, not a premise). */
 export const PRESCRIPTIVE = /\b(should|must|is (indicated|recommended|preferred|required|the treatment|treated with|managed (by|with))|are (indicated|recommended|preferred|required)|first[- ]line|treatment of choice|next step|perform(ed)? (immediately|urgently)|do not (wait|delay)|never delay|requires? (immediate|urgent|emergent))\b/i;
 
+const base = (ctx) => ctx.idBase ?? 0;
+/** The reserved claims this step may use: all of them, or its share when several recall steps feed one item. */
+const reservedFor = (ctx) => branchShare(ctx.path ?? [], ctx.step, ctx.source?.focus?.claims ?? []);
+
 export default {
   id: 'recall',
   label: 'Recall',
   bloom: 1,
   description: 'Retrieve the specific facts the item will depend on, each grounded in a verbatim span.',
   requires: [],
+  countParam: 'concepts',
   params: {
     concepts: { type: 'integer', default: 3, min: 1, max: 8, description: 'How many distinct facts to extract', positional: true },
     mode: { type: 'enum', values: ['premises', 'all'], default: 'premises', description: 'premises: only observations, mechanisms, quantities, definitions (no recommendations/actions/conclusions, so the plan must be built downstream); all: any fact' },
@@ -44,8 +50,8 @@ Rules:
 - Facts must be mutually distinct: no two may be answerable by the same sentence of the source.
 - Prefer facts with consequences (what changes if the fact is true) over trivia.${premises}
 - Write statements in the learner's own terms; never refer to "the article", "the study", or "the text".${ctx.source?.digest ? `
-- A SOURCE DIGEST is provided. Every fact must rest on one or more claims: list their ids in \`claims\`, and copy sourceSpan verbatim from a claim's quotation.${mode === 'premises' ? ' Claims typed "recommendation" may NOT be used as facts.' : ''}${ctx.source?.focus?.claims?.length ? ` Use ONLY the reserved claims ${ctx.source.focus.claims.join(', ')}.` : ''}` : ''}
-Ids are c1 … c${n}.`;
+- A SOURCE DIGEST is provided. Every fact must rest on one or more claims: list their ids in \`claims\`, and copy sourceSpan verbatim from a claim's quotation.${mode === 'premises' ? ' Claims typed "recommendation" may NOT be used as facts.' : ''}${ctx.source?.focus?.claims?.length ? ` Use ONLY the reserved claims ${reservedFor(ctx).join(', ')}${reservedFor(ctx).length < ctx.source.focus.claims.length ? ` (this step's share of the item's reserved claims; the other recall steps use the rest)` : ''}.` : ''}` : ''}
+Ids are c${base(ctx) + 1} … c${base(ctx) + n}.`;
   },
 
   verify(artifact, ctx) {
@@ -56,6 +62,7 @@ Ids are c1 … c${n}.`;
     for (const c of artifact.concepts) {
       if (ids.has(c.id)) problems.push(`duplicate concept id ${c.id}`);
       ids.add(c.id);
+      if (base(ctx) > 0 && c.id !== `c${base(ctx) + ids.size}`) problems.push(`${c.id}: this recall step's ids must run c${base(ctx) + 1} … c${base(ctx) + n} in order (earlier recall steps use the lower numbers)`);
       if (c.sourceSpan.trim().split(/\s+/).length > 60) problems.push(`${c.id}: sourceSpan longer than 60 words`);
       if (/\b(the (article|study|text|passage|paper))\b/i.test(c.statement)) problems.push(`${c.id}: statement refers to the source`);
       if (ctx.step.params.mode === 'premises' && PRESCRIPTIVE.test(c.statement)) problems.push(`${c.id}: reads as a recommendation/action, not a premise ("${c.statement.slice(0, 70)}…")`);
@@ -67,7 +74,7 @@ Ids are c1 … c${n}.`;
           const a = byId.get(id);
           if (!a) problems.push(`${c.id}: cites unknown claim ${id}`);
           else if (ctx.step.params.mode === 'premises' && a.type === 'recommendation') problems.push(`${c.id}: rests on recommendation claim ${id}; premises-only recall may not use recommendations`);
-          else if (ctx.source.focus?.claims?.length && !ctx.source.focus.claims.includes(id)) problems.push(`${c.id}: cites ${id}, which is not reserved for this item (reserved: ${ctx.source.focus.claims.join(', ')})`);
+          else if (ctx.source.focus?.claims?.length && !reservedFor(ctx).includes(id)) problems.push(`${c.id}: cites ${id}, which is not reserved for this ${reservedFor(ctx).length < ctx.source.focus.claims.length ? 'step' : 'item'} (reserved: ${reservedFor(ctx).join(', ')})`);
         }
       }
     }
@@ -79,10 +86,10 @@ Ids are c1 … c${n}.`;
     return {
       topic: ctx.source.title || 'Mock topic',
       concepts: Array.from({ length: n }, (_, i) => ({
-        id: `c${i + 1}`,
+        id: `c${base(ctx) + i + 1}`,
         statement: `[MOCK] Fact ${i + 1}: a precise premise about the topic.`,
         sourceSpan: ctx.source.text ? ctx.source.text.split(/\s+/).slice(i * 12, i * 12 + 10).join(' ') : `[MOCK] span ${i + 1}`,
-        claims: ctx.source?.focus?.claims?.length ? [ctx.source.focus.claims[i % ctx.source.focus.claims.length]] : ctx.source?.digest ? [ctx.source.digest.claims.find((a) => a.type !== 'recommendation')?.id ?? ctx.source.digest.claims[0].id] : [],
+        claims: ctx.source?.focus?.claims?.length ? [reservedFor(ctx)[i % reservedFor(ctx).length]] : ctx.source?.digest ? [ctx.source.digest.claims.find((a) => a.type !== 'recommendation')?.id ?? ctx.source.digest.claims[0].id] : [],
       })),
     };
   },

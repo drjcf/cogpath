@@ -86,6 +86,12 @@ label.field.warn { color: var(--warn); }
 /* the path glyph */
 .glyph { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 0; vertical-align: middle; }
 .glyph-seg { display: inline-flex; align-items: center; }
+.glyph-chain { display: inline-flex; align-items: center; }
+.glyph-chain.branch { margin-right: 12px; padding-left: 8px; border-left: 2px solid var(--rule-strong); }
+.glyph-chain.branch:last-child { margin-right: 0; }
+.glyph-from { font-size: 11px; color: var(--muted, #6b7280); margin-right: 6px; font-family: var(--mono); white-space: nowrap; }
+.pill-label { font-family: var(--mono); font-size: 10.5px; opacity: .7; }
+.walk-after { font-size: 12px; color: var(--muted, #6b7280); font-family: var(--mono); margin-left: 8px; }
 .glyph-rule { width: 14px; height: 1.5px; background: var(--rule-strong); display: inline-block; }
 .pill { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 9px; border-radius: 12px; background: var(--step-bg); color: var(--step); font-size: 12.5px; line-height: 1.5; white-space: nowrap; border: 1px solid transparent; font-family: var(--sans); }
 .pill-name { font-weight: 600; }

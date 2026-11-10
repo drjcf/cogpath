@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
-import { composeText, stateFromText, DEFAULT_STATE, STEP_VERB } from '../lib/path.js';
+import { composeText, stateFromText, isBranched, DEFAULT_STATE, STEP_VERB } from '../lib/path.js';
 import PathGlyph from './PathGlyph.jsx';
 
 /** The registry (ops, parameters, presets) once per page. */
@@ -23,6 +23,7 @@ function Chips({ values, onChange, placeholder }) {
 
 /** One path: four step editors, the glyph, and the grammar text they produce. */
 function OnePath({ text, onChange, registry, showHelp, index, onRemove, canRemove }) {
+  const branched = useMemo(() => isBranched(text), [text]); // the four fixed controls cannot show a branch, a name or a repeat
   const [asText, setAsText] = useState(false);
   const [raw, setRaw] = useState(text);
   const st = useMemo(() => stateFromText(text, DEFAULT_STATE), [text]);
@@ -37,10 +38,10 @@ function OnePath({ text, onChange, registry, showHelp, index, onRemove, canRemov
           <option value="">Start from a preset</option>
           {(registry?.presets ?? []).map((p) => <option key={p.id} value={p.path}>{p.name}</option>)}
         </select>
-        <button type="button" className="link" onClick={() => setAsText((v) => !v)}>{asText ? 'Edit with controls' : 'Edit as text'}</button>
+        {branched ? <span className="muted small">Branched path: edit as text</span> : <button type="button" className="link" onClick={() => setAsText((v) => !v)}>{asText ? 'Edit with controls' : 'Edit as text'}</button>}
         {canRemove ? <button type="button" className="link quiet" onClick={onRemove}>Remove</button> : null}
       </div>
-      {asText ? (
+      {asText || branched ? (
         <input className="mono wide" value={raw} onChange={(e) => setRaw(e.target.value)} onBlur={() => onChange(raw)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onChange(raw); } }} />
       ) : (
         <div className="composer-steps">

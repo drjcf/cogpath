@@ -26,6 +26,7 @@ export default {
   bloom: 4,
   description: 'Connect recalled facts into relations (contrast, causal, mechanism, comparison) with the common misreading of each.',
   requires: ['recall'],
+  countParam: 'relations',
   params: {
     kind: { type: 'enum', values: KINDS, default: 'contrast', description: 'Dominant relation type to look for', positional: true },
     relations: { type: 'integer', default: 2, min: 1, max: 6, description: 'How many relations to produce' },
@@ -44,19 +45,19 @@ Rules:
 - "claim" is the relationship itself; "implication" is what it changes for a decision, stated as understanding ("deep placement puts fat where injured veins can take it up"), never as an instruction ("fat should be placed subcutaneously"). Deciding is the EVALUATE and SYNTHESIZE steps' job; a relation that already names the action is rejected.
 - "commonMisreading" is the specific wrong relation a plausible learner would draw from the same facts. This will seed a distractor, so make it realistic, not absurd.
 - Never refer to "the article", "the study", or "the text".
-Ids are r1 … r${relations}.`;
+Ids are r${(ctx.idBase ?? 0) + 1} … r${(ctx.idBase ?? 0) + relations}.`;
   },
 
   verify(artifact, ctx) {
     const problems = [];
-    const recall = Object.values(ctx.artifacts).find((a) => a?.concepts);
-    const conceptIds = new Set((recall?.concepts ?? []).map((c) => c.id));
+    const conceptIds = new Set(Object.values(ctx.artifacts).flatMap((a) => a?.concepts ?? []).map((c) => c.id));
     const n = ctx.step.params.relations;
     if (artifact.relations.length !== n) problems.push(`expected ${n} relations, got ${artifact.relations.length}`);
     const ids = new Set();
     for (const r of artifact.relations) {
       if (ids.has(r.id)) problems.push(`duplicate relation id ${r.id}`);
       ids.add(r.id);
+      if ((ctx.idBase ?? 0) > 0 && r.id !== `r${ctx.idBase + ids.size}`) problems.push(`${r.id}: this analyze step's ids must run r${ctx.idBase + 1} … r${ctx.idBase + n} in order (earlier analyze steps use the lower numbers)`);
       for (const c of r.between) if (!conceptIds.has(c)) problems.push(`${r.id}: references unknown concept ${c}`);
       if (new Set(r.between).size < 2) problems.push(`${r.id}: must connect two distinct concepts`);
       // A relation explains; it does not decide. A prescriptive claim or implication hands the later steps' answer to a learner who only reads this step.
@@ -69,12 +70,11 @@ Ids are r1 … r${relations}.`;
   },
 
   mock(ctx) {
-    const recall = Object.values(ctx.artifacts).find((a) => a?.concepts);
-    const cids = (recall?.concepts ?? []).map((c) => c.id);
+    const cids = Object.values(ctx.artifacts).flatMap((a) => a?.concepts ?? []).map((c) => c.id);
     const n = ctx.step.params.relations;
     return {
       relations: Array.from({ length: n }, (_, i) => ({
-        id: `r${i + 1}`,
+        id: `r${(ctx.idBase ?? 0) + i + 1}`,
         kind: ctx.step.params.kind,
         between: [cids[i % cids.length], cids[(i + 1) % cids.length]],
         claim: `[MOCK] Relation ${i + 1}: how ${cids[i % cids.length]} and ${cids[(i + 1) % cids.length]} interact.`,

@@ -11,7 +11,7 @@ import { describeOps } from '../core/ops/index.js';
 import { PRESETS } from '../core/presets.js';
 import { ATTRIBUTIONS, CLAIM_TYPES, SECTIONS, reviewPassage } from '../core/ingest.js';
 import { summarize } from '../core/build.js';
-import { parsePath } from '../core/path.js';
+import { parsePath, formatPath, isLinear } from '../core/path.js';
 import { newId } from '../core/executor.js';
 import { DEFAULT_MODEL, isMock } from '../core/llm.js';
 import { identify, requireWriter, authMode } from './auth.js';
@@ -68,7 +68,7 @@ export function apiRouter() {
   r.get('/ops', (_req, res) => { res.json({ ops: describeOps(), presets: PRESETS }); });
   r.post('/paths/check', (req, res) => {
     const paths = Array.isArray(req.body?.paths) ? req.body.paths : [req.body?.path];
-    const out = paths.map((p) => { try { const steps = parsePath(String(p ?? '')); return { path: p, ok: true, normalized: steps.map((st) => `${st.op}${Object.keys(st.params).length ? `(${Object.entries(st.params).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`).join(', ')})` : ''}`).join(' > '), steps }; } catch (e) { return { path: p, ok: false, error: e.message }; } });
+    const out = paths.map((p) => { try { const steps = parsePath(String(p ?? '')); return { path: p, ok: true, normalized: formatPath(steps), branched: !isLinear(steps), steps }; } catch (e) { return { path: p, ok: false, error: e.message }; } });
     res.json({ paths: out });
   });
 

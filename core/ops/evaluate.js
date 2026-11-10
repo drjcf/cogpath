@@ -29,6 +29,7 @@ export default {
   bloom: 5,
   description: 'Weigh competing options against explicit criteria using the analyzed relations; name the decisive factor.',
   requires: ['analyze'],
+  countParam: 'options',
   params: {
     criteria: { type: 'list', default: ['benefit', 'risk'], description: 'Criteria to judge against, in priority order', positional: true },
     options: { type: 'integer', default: 3, min: 2, max: 5, description: 'How many competing options to consider' },
@@ -49,14 +50,17 @@ Rules:
 - Every option must be one a competent practitioner might actually choose; no straw men. "best" must win on the highest-priority criterion where the options differ; "runnerUp" must be the STRONGEST competitor, the option a thoughtful learner could defend and some practitioners do choose. Abstention (defer, observe, decline, no treatment) may be the runner-up only when it is itself a defensible strategy for the situation, never as a filler. State the decisive factor and exactly why the runner-up loses.
 - Do not let the best option be best on every criterion; real decisions trade off.
 - Never refer to "the article", "the study", or "the text".
-Option ids are o1 … o${options}.`;
+Option ids are o${(ctx.idBase ?? 0) + 1} … o${(ctx.idBase ?? 0) + options}.`;
   },
 
   verify(artifact, ctx) {
     const problems = [];
-    const analyze = Object.values(ctx.artifacts).find((a) => a?.relations);
-    const relIds = new Set((analyze?.relations ?? []).map((r) => r.id));
+    const relIds = new Set(Object.values(ctx.artifacts).flatMap((a) => a?.relations ?? []).map((r) => r.id));
     const optIds = new Set(artifact.options.map((o) => o.id));
+    if ((ctx.idBase ?? 0) > 0) {
+      const want = Array.from({ length: ctx.step.params.options }, (_, i) => `o${ctx.idBase + i + 1}`);
+      if (artifact.options.map((o) => o.id).join() !== want.join()) problems.push(`option ids must run ${want[0]} … ${want[want.length - 1]} in order (earlier evaluate steps use the lower numbers)`);
+    }
     if (artifact.options.length !== ctx.step.params.options) problems.push(`expected ${ctx.step.params.options} options, got ${artifact.options.length}`);
     if (!optIds.has(artifact.best)) problems.push(`best '${artifact.best}' is not an option id`);
     if (!optIds.has(artifact.runnerUp)) problems.push(`runnerUp '${artifact.runnerUp}' is not an option id`);
@@ -72,22 +76,22 @@ Option ids are o1 … o${options}.`;
   },
 
   mock(ctx) {
-    const analyze = Object.values(ctx.artifacts).find((a) => a?.relations);
-    const rids = (analyze?.relations ?? []).map((r) => r.id);
+    const rids = Object.values(ctx.artifacts).flatMap((a) => a?.relations ?? []).map((r) => r.id);
+    const b = ctx.idBase ?? 0;
     const { criteria, options } = ctx.step.params;
     return {
       decision: '[MOCK] Which approach should be taken?',
       criteria,
       options: Array.from({ length: options }, (_, i) => ({
-        id: `o${i + 1}`,
+        id: `o${b + i + 1}`,
         label: `[MOCK] strategy ${i + 1}`,
         derivedFrom: [rids[i % rids.length]],
         scores: criteria.map((c, j) => ({ criterion: c, rating: Math.max(1, Math.min(5, 5 - i - (j % 2))), rationale: `[MOCK] because of ${rids[i % rids.length]}` })),
       })),
-      best: 'o1',
-      runnerUp: 'o2',
+      best: `o${b + 1}`,
+      runnerUp: `o${b + 2}`,
       decisiveFactor: `[MOCK] ${criteria[0]}`,
-      whyRunnerUpFails: `[MOCK] o2 loses on ${criteria[0]} because of ${rids[0]}.`,
+      whyRunnerUpFails: `[MOCK] o${b + 2} loses on ${criteria[0]} because of ${rids[0]}.`,
     };
   },
 };

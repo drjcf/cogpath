@@ -1,6 +1,7 @@
 /**
  * Executes a cognitive path over a source: one structured-output call per step, each step seeing the
- * source plus every earlier artifact, then the ASSEMBLE op builds the item.
+ * source plus the artifacts of the steps it depends on (all earlier steps, in a chain), then the ASSEMBLE op
+ * builds the item. Steps whose dependencies are done run together.
  *
  * Every call shares the same prefix (framework preamble + source) so the prompt cache
  * covers the source after the first step.
@@ -10,7 +11,7 @@ import { getOp, ASSEMBLE, schemaOf } from './ops/index.js';
 import { validate } from './schema.js';
 import { complete, part, DEFAULT_MODEL } from './llm.js';
 import { letterOptions } from './ops/assemble.js';
-import { formatPath } from './path.js';
+import { formatPath, idBaseOf, depsOf, ancestorIds } from './path.js';
 import { wordCount } from './source.js';
 
 export const PREAMBLE = `You are an assessment-design engine. You execute one cognitive operation at a time over a SOURCE, producing a structured artifact that later operations and the final item will depend on. Be precise, grounded in the source, and write every statement as a learner would state it from understanding rather than as a summary of a document. Never refer to "the article", "the study", "the source", "the passage", or "the text". Use the field's standard technical terminology for conditions, anatomy, procedures, and outcomes (e.g. "pulmonary fat embolism", not "lung blockage"); never substitute lay paraphrases for accepted terms.`;
@@ -22,8 +23,11 @@ export function artifactsBlock(artifacts, steps) {
   return entries.length ? `ARTIFACTS FROM EARLIER STEPS:\n\n${entries.join('\n\n')}` : 'ARTIFACTS FROM EARLIER STEPS: none (this is the first step).';
 }
 
-function makeCtx({ source, path, step, artifacts }) {
-  return { source, path, step, priorSteps: path.slice(0, step.index), artifacts };
+/** What an op sees: the steps it depends on (directly or not) and only their artifacts. The assembler sees all of them. */
+export function makeCtx({ source, path, step, artifacts }) {
+  const anc = new Set(ancestorIds(path, step.id));
+  const priorSteps = path.filter((s) => anc.has(s.id));
+  return { source, path, step, priorSteps, artifacts: Object.fromEntries(priorSteps.filter((s) => artifacts[s.id] !== undefined).map((s) => [s.id, artifacts[s.id]])), idBase: step.op === 'assemble' ? 0 : idBaseOf(path, step) };
 }
 
 /**
@@ -35,12 +39,12 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
   const schema = schemaOf(op, ctx);
   const instruction = op.instruction(ctx);
   const useEffort = effort ?? op.effort;
-  const rec = { id: step.id, op: op.id, params: step.params, effort: useEffort, instruction, attempts: [] };
+  const rec = { id: step.id, op: op.id, params: step.params, deps: depsOf(path, step), effort: useEffort, instruction, attempts: [] };
   onEvent?.({ type: 'step:start', step: rec.id, op: op.id, effort: useEffort });
 
   let feedback = '';
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const parts = [...source.parts, part.text(artifactsBlock(artifacts, path)), part.text(instruction + feedback)];
+    const parts = [...source.parts, part.text(artifactsBlock(ctx.artifacts, ctx.priorSteps)), part.text(instruction + feedback)];
     const res = await complete({
       instructions: PREAMBLE, parts, schema, schemaName: `${op.id}_output`, effort: useEffort, model,
       maxOutputTokens: op.maxOutputTokens, summary: 'auto', label: `${label ?? ''}${step.id}`, mock: () => op.mock(ctx),
@@ -72,19 +76,35 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
   return rec;
 }
 
-/** Run steps [fromIndex..] of `path` given artifacts for the earlier ones. Returns { steps, artifacts }. */
-export async function runSteps({ source, path, fromIndex = 0, artifacts = {}, model, effort, onEvent, label }) {
-  const out = [];
+/**
+ * Run the steps of `path` named in `only` (default: all), given artifacts for the others. A step runs once every step it
+ * depends on has finished; steps that are ready together run together. `onStep(rec)` is called as each finishes, so a
+ * caller keeps finished work if a later step fails (the first failure is thrown after the running steps settle).
+ * Returns { steps, artifacts }.
+ */
+export async function runSteps({ source, path, only, artifacts = {}, model, effort, onEvent, onStep, label }) {
+  const todo = new Set(only ?? path.map((s) => s.id));
   const acc = { ...artifacts };
-  for (const step of path.slice(fromIndex)) {
-    const rec = await executeOp({ op: getOp(step.op), source, path, step, artifacts: acc, model, effort, onEvent, label });
-    acc[step.id] = rec.artifact;
-    out.push(rec);
+  const out = [];
+  const done = new Set(path.filter((s) => !todo.has(s.id)).map((s) => s.id));
+  while (todo.size) {
+    const ready = path.filter((s) => todo.has(s.id) && depsOf(path, s).every((d) => done.has(d)));
+    if (!ready.length) throw new Error(`cannot run ${[...todo].join(', ')}: a step it depends on is neither finished nor scheduled`);
+    const settled = await Promise.allSettled(ready.map((step) => executeOp({ op: getOp(step.op), source, path, step, artifacts: acc, model, effort, onEvent, label })));
+    for (const [i, r] of settled.entries()) {
+      if (r.status !== 'fulfilled') continue;
+      acc[ready[i].id] = r.value.artifact; out.push(r.value); onStep?.(r.value);
+    }
+    const failed = settled.find((r) => r.status === 'rejected');
+    if (failed) throw failed.reason;
+    for (const step of ready) { todo.delete(step.id); done.add(step.id); }
   }
   return { steps: out, artifacts: acc };
 }
 
-/** Full run: all steps + assemble. */
+/** One distractor per step, so an MCQ takes at most this many steps; the short-answer format has no such limit. */
+export const MAX_MCQ_STEPS = 5;
+
 /**
  * Full run: all steps + assemble. Never throws away completed work: on failure the returned trace has
  * status 'failed', `error`, and every step that finished (the CLI saves it as a partial run).
@@ -98,12 +118,13 @@ export async function runPath({ source, path, model = DEFAULT_MODEL, effort, onE
     model, pathText: formatPath(path), path, steps: [], artifacts: {}, assemble: null, item: null, totals: null, verification: null, error: null,
   };
   try {
-    for (const step of path) {
-      const rec = await executeOp({ op: getOp(step.op), source, path, step, artifacts: trace.artifacts, model, effort, onEvent, label: `${id} ` });
-      trace.artifacts[step.id] = rec.artifact;
-      trace.steps.push(rec);
-    }
-    const assembleStep = { id: 'assemble', op: 'assemble', index: path.length, params: {} };
+    if (path.length > MAX_MCQ_STEPS) throw new Error(`A multiple-choice item has one distractor per step, so it takes at most ${MAX_MCQ_STEPS} steps (this path has ${path.length})`);
+    await runSteps({
+      source, path, model, effort, onEvent, label: `${id} `,
+      onStep: (rec) => { trace.artifacts[rec.id] = rec.artifact; trace.steps.push(rec); },
+    });
+    trace.steps.sort((x, y) => path.findIndex((s) => s.id === x.id) - path.findIndex((s) => s.id === y.id));
+    const assembleStep = { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path[path.length - 1].id] };
     const asm = await executeOp({ op: ASSEMBLE, source, path, step: assembleStep, artifacts: trace.artifacts, model, effort, onEvent, label: `${id} ` });
     trace.assemble = { usage: asm.usage, ms: asm.ms, problems: asm.problems, attempts: asm.attempts, instruction: asm.instruction, reasoningSummary: asm.reasoningSummary, notes: asm.notes };
     trace.item = letterOptions(asm.artifact, seed ?? hashSeed(id));

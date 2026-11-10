@@ -73,6 +73,10 @@ test('api: upload, ingest job, review, approve, build job, record and events', a
   assert.ok(ops.presets.length >= 3);
   const chk = (await post('/paths/check', { paths: [ops.presets[0].path, 'recall(3) > evaluate(x)'] })).body.paths;
   assert.equal(chk[0].ok, true); assert.equal(chk[1].ok, false); assert.match(chk[1].error, /requires an earlier/);
+  const dag = (await post('/paths/check', { paths: ['r1: recall(2) > a: analyze(causal, relations=1); r2: recall(2); @a, @r2 > evaluate(x, y) > synthesize(plan)', 'recall > analyze; recall'] })).body.paths;
+  assert.equal(dag[0].ok, true); assert.equal(dag[0].branched, true); assert.equal(chk[0].branched, false);
+  assert.match(dag[0].normalized, /@a, @r2 > evaluate/);
+  assert.equal(dag[1].ok, false); assert.match(dag[1].error, /2 terminal steps/);
   assert.equal((await post('/builds', { sha, items: 1, paths: ['recall(3) > nonsense'] }, as('rev@example.com'))).status, 400);
 
   const b = await post('/builds', { sha, items: 2, deep: true, baseline: true, seed: 3, paths: [ops.presets[0].path, ops.presets[2].path] }, as('rev@example.com'));

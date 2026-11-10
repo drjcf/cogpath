@@ -7,7 +7,7 @@
  * the stored downstream artifacts; only records that stored the pick's entailment), and source / digest recall when
  * the digest the build used is still in the store with the same claims. Everything else is left as it was.
  */
-import { judgePick, notesFor } from './verifier.js';
+import { judgePick, notesFor, necessitySummary } from './verifier.js';
 import { notesFromClaims } from './entail.js';
 import { loadIngest } from './store.js';
 
@@ -58,12 +58,14 @@ export async function rescoreBuild(build) {
     const item = tr.item;
     const pn = v.pathNecessity;
     if (pn?.picks) {
-      for (const p of pn.picks) { const was = rejudge(p, notesFor(tr.artifacts, tr.path.slice(0, p.k))); if (was !== null) note(it.plan.id, `necessity k${p.k}: ${was} → ${p.choice}${p.override ? ` (${p.override.slice(0, 80)})` : ' (mis-cited quote re-attributed)'}`); }
-      const first = pn.picks.find((p) => p.choice === item.key);
-      const determinedAt = first ? first.k : null;
-      if (determinedAt !== pn.determinedAt) note(it.plan.id, `necessity determinedAt ${pn.determinedAt} → ${determinedAt}`);
-      Object.assign(pn, { determinedAt, leaksContained: pn.picks.filter((p) => p.override).length, pass: determinedAt === pn.pathLength,
-        verdict: determinedAt === null ? 'key never determined from notes (item may be unanswerable from the path, or the key is not the terminal artifact)' : determinedAt === pn.pathLength ? 'key determinable only with the full path' : `key determinable after step ${determinedAt} of ${pn.pathLength} (steps ${tr.path.slice(determinedAt).map((s) => s.id).join(', ')} not necessary)` });
+      for (const p of pn.picks) {
+        const saw = p.steps ?? tr.path.slice(0, p.k).map((s) => s.id); // picks stored before DAGs saw the first k steps
+        const was = rejudge(p, notesFor(tr.artifacts, tr.path.filter((s) => saw.includes(s.id))));
+        if (was !== null) note(it.plan.id, `necessity ${p.without ? `without ${p.without}` : `k${p.k}`}: ${was} → ${p.choice}${p.override ? ` (${p.override.slice(0, 80)})` : ' (mis-cited quote re-attributed)'}`);
+      }
+      const sum = necessitySummary({ picks: pn.picks, key: item.key, path: tr.path });
+      if (sum.determinedAt !== pn.determinedAt) note(it.plan.id, `necessity determinedAt ${pn.determinedAt} → ${sum.determinedAt}`);
+      Object.assign(pn, sum);
     }
     const dm = v.distractorMapping;
     if (dm?.perStep) {

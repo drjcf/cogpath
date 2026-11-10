@@ -2,15 +2,18 @@
  * Verification of a compiled item. Four checks:
  *   grounding          local: every recall/analyze span is found in the source text
  *   coverTheOptions    2 calls: free answer from stem + lead-in only, then mapped to an option; must map to the key
- *   pathNecessity      n+1 calls: with notes from steps 1..k only (no source, no outside knowledge), the key should
- *                      become determinable only at k = n. Earlier = the item is answerable without the later steps.
- *   distractorMapping  deep: corrupt artifact k, re-run the downstream steps, pick an option; expect the distractor
- *                      tagged failsAt = step k. Confirms each distractor really is "what a learner who failed there picks".
+ *   pathNecessity      n+1 calls: for each step, notes of every step except it and the steps that depend on it (no
+ *                      source, no outside knowledge); the key must NOT be determinable. With all the notes it must be.
+ *                      In a chain this is notes from steps 1..k only. A step the key survives without is not necessary.
+ *   distractorMapping  deep: corrupt a step's artifact, re-run the steps that depend on it, pick an option; expect the
+ *                      distractor tagged failsAt = that step. Confirms each distractor really is "what a learner who
+ *                      failed there picks".
  */
 import { obj, arr, str, enm, num, bool, assertStrict } from './schema.js';
 import { complete, part } from './llm.js';
 import { getOp, schemaOf } from './ops/index.js';
-import { runSteps, PREAMBLE } from './executor.js';
+import { runSteps, PREAMBLE, makeCtx } from './executor.js';
+import { descendantIds, isLinear } from './path.js';
 
 const UNDETERMINED = 'UNDETERMINED';
 
@@ -199,28 +202,42 @@ export async function verifyDigestRecall({ trace, source, model }) {
 
 // ─── 3. path necessity ──────────────────────────────────────
 
+/**
+ * The verdict on a set of necessity picks (pure, so stored picks can be re-summarized): the full-notes pick must be the key
+ * and no pick with a step (and what depends on it) taken away may be. `k` is the number of steps whose notes the pick saw.
+ */
+export function necessitySummary({ picks, key, path }) {
+  const n = path.length;
+  const full = picks.find((p) => p.k === n);
+  const leaked = picks.filter((p) => p.k !== n && p.choice === key);
+  const first = [...picks].sort((x, y) => x.k - y.k).find((p) => p.choice === key);
+  const determinedAt = first ? first.k : null;
+  const pass = full?.choice === key && leaked.length === 0;
+  const verdict = determinedAt === null ? 'key never determined from notes (item may be unanswerable from the path, or the key is not the terminal artifact)'
+    : pass ? 'key determinable only with the full path'
+    : !isLinear(path) ? `key still determinable without ${leaked.map((p) => p.without ?? path[p.k]?.id).join(', ')} (and the steps that depend on it): not necessary`
+    : `key determinable after step ${determinedAt} of ${n} (steps ${path.slice(determinedAt).map((s) => s.id).join(', ')} not necessary)`;
+  return { determinedAt, pass, verdict, leaksContained: picks.filter((p) => p.override).length };
+}
+
 export async function verifyPathNecessity({ trace, model, onEvent }) {
   const item = trace.item;
-  const n = trace.path.length;
+  const path = trace.path;
+  const n = path.length;
+  // one pick per step with that step and its dependents withheld, then one with everything
+  const cases = [...path.map((v) => ({ without: v.id, drop: new Set([v.id, ...descendantIds(path, v.id)]) })), { without: null, drop: new Set() }];
   const picks = [];
-  for (let k = 0; k <= n; k++) {
-    const steps = trace.path.slice(0, k);
+  for (const c of cases) {
+    const steps = path.filter((s) => !c.drop.has(s.id));
+    const k = steps.length;
     const notes = notesFor(trace.artifacts, steps);
-    const r = await pickWithNotes({ item, notes, model, label: `verify:necessity:k${k}`, mockChoice: k === n ? item.key : UNDETERMINED });
+    const r = await pickWithNotes({ item, notes, model, label: `verify:necessity:${c.without ?? 'all'}`, mockChoice: c.without === null ? item.key : UNDETERMINED });
     const entailed = r.entailment.filter((e) => e.fullyEntailed).map((e) => e.optionId);
-    picks.push({ k, steps: steps.map((s) => s.id), choice: r.choice, lean: r.lean, raw: r.raw, override: r.override, citationsFixed: r.citationsFixed, entailed, reason: r.reason, entailment: r.entailment, usage: r.usage });
-    onEvent?.({ type: 'verify:necessity', k, choice: r.choice, lean: r.lean, raw: r.raw, override: r.override, entailed });
+    picks.push({ k, without: c.without, steps: steps.map((s) => s.id), choice: r.choice, lean: r.lean, raw: r.raw, override: r.override, citationsFixed: r.citationsFixed, entailed, reason: r.reason, entailment: r.entailment, usage: r.usage });
+    onEvent?.({ type: 'verify:necessity', k, without: c.without, choice: r.choice, lean: r.lean, raw: r.raw, override: r.override, entailed });
   }
-  const first = picks.find((p) => p.choice === item.key);
-  const determinedAt = first ? first.k : null;
-  const leaks = picks.filter((p) => p.override).length;
-  return {
-    picks, key: item.key, pathLength: n, determinedAt, leaksContained: leaks,
-    pass: determinedAt === n,
-    verdict: determinedAt === null ? 'key never determined from notes (item may be unanswerable from the path, or the key is not the terminal artifact)'
-      : determinedAt === n ? 'key determinable only with the full path'
-      : `key determinable after step ${determinedAt} of ${n} (steps ${trace.path.slice(determinedAt).map((s) => s.id).join(', ')} not necessary)`,
-  };
+  picks.sort((x, y) => x.k - y.k);
+  return { picks, key: item.key, pathLength: n, ...necessitySummary({ picks, key: item.key, path }) };
 }
 
 // ─── 4. distractor mapping (deep) ───────────────────────────
@@ -252,7 +269,7 @@ async function corruptArtifact({ trace, source, stepIndex, model }) {
   const step = trace.path[stepIndex];
   const op = getOp(step.op);
   if (op.id === 'synthesize') return corruptSynthesize(trace.artifacts[step.id], step.id);
-  const ctx = { source, path: trace.path, step, priorSteps: trace.path.slice(0, stepIndex), artifacts: Object.fromEntries(trace.path.slice(0, stepIndex).map((s) => [s.id, trace.artifacts[s.id]])) };
+  const ctx = makeCtx({ source, path: trace.path, step, artifacts: trace.artifacts });
   const schema = schemaOf(op, ctx);
   const hints = {
     recall: 'replace exactly one fact with a subtly false version of itself (plausible, same topic, wrong detail)',
@@ -281,8 +298,10 @@ export async function verifyDistractorMapping({ trace, source, model, onEvent })
   for (let k = 0; k < n; k++) {
     const step = trace.path[k];
     const corrupted = await corruptArtifact({ trace, source, stepIndex: k, model });
-    const prior = Object.fromEntries(trace.path.slice(0, k).map((s) => [s.id, trace.artifacts[s.id]]));
-    const { artifacts } = await runSteps({ source: withheldSource(source), path: trace.path, fromIndex: k + 1, artifacts: { ...prior, [step.id]: corrupted }, model, effort: 'low', label: `verify:map:${step.id} ` });
+    // everything outside the step's cone keeps its artifact; the steps that depend on it are re-run from the corrupted one
+    const cone = descendantIds(trace.path, step.id);
+    const kept = Object.fromEntries(trace.path.filter((s) => s.id !== step.id && !cone.includes(s.id)).map((s) => [s.id, trace.artifacts[s.id]]));
+    const { artifacts } = await runSteps({ source: withheldSource(source), path: trace.path, only: cone, artifacts: { ...kept, [step.id]: corrupted }, model, effort: 'low', label: `verify:map:${step.id} ` });
     const expected = item.options.filter((o) => o.failsAt === step.id).map((o) => o.id);
     const notes = notesFor(artifacts, trace.path);
     const r = await pickWithNotes({ item, notes, model, label: `verify:map:pick:${step.id}`, mockChoice: expected[0] ?? UNDETERMINED });

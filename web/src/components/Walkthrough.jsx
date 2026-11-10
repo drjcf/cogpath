@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { STEP_LABEL } from '../lib/path.js';
-import { stepArgLabel, parsePathText } from '../lib/path.js';
+import { STEP_LABEL, stepArgLabel, parsePathText, stepTitle, opOfStep } from '../lib/path.js';
 
 /**
  * How the answer was made: the path, vertical, each step opened to what it produced, in words rather than JSON.
@@ -16,15 +15,18 @@ export default function Walkthrough({ trace }) {
       {trace.path.map((s, i) => {
         const a = trace.artifacts[s.id];
         const rec = trace.steps?.find((x) => x.id === s.id);
-        const arg = parsed[i] ? stepArgLabel(parsed[i]) : '';
+        const ps = parsed.find((x) => x.id === s.id);
+        const arg = ps ? stepArgLabel(ps) : '';
+        const deps = (s.deps ?? ps?.deps ?? []).filter(Boolean);
+        const after = deps.length === 1 && deps[0] === trace.path[i - 1]?.id ? [] : deps; // a plain chain needs no note
         return (
           <section key={s.id} className={`walk-step step-${s.op}`}>
             <button type="button" className="walk-head" onClick={() => toggle(s.id)} aria-expanded={open.has(s.id)}>
               <span className="walk-n">{i + 1}</span>
-              <span className="walk-title">{STEP_LABEL[s.op]}{arg ? <span className="walk-arg">{arg}</span> : null}</span>
+              <span className="walk-title">{stepTitle(s.id, trace.path)}{arg ? <span className="walk-arg">{arg}</span> : null}{after.length ? <span className="walk-after">after {after.join(', ')}</span> : null}</span>
               <span className="walk-meta">{rec ? `${rec.attempts.length > 1 ? `${rec.attempts.length} attempts, ` : ''}${Math.round((rec.ms ?? 0) / 1000)} s, ${((rec.usage?.output_tokens ?? 0) / 1000).toFixed(1)}k tokens out` : ''}</span>
             </button>
-            {open.has(s.id) ? <div className="walk-body">{a ? <Artifact op={s.op} a={a} /> : <p className="muted">no artifact (the step failed)</p>}{rec?.attempts?.some((x) => x.problems?.length) ? <div className="walk-retry">Sent back once: {rec.attempts.flatMap((x) => x.problems ?? []).slice(0, 3).join('; ')}</div> : null}</div> : null}
+            {open.has(s.id) ? <div className="walk-body">{a ? <Artifact op={s.op} a={a} path={trace.path} /> : <p className="muted">no artifact (the step failed)</p>}{rec?.attempts?.some((x) => x.problems?.length) ? <div className="walk-retry">Sent back once: {rec.attempts.flatMap((x) => x.problems ?? []).slice(0, 3).join('; ')}</div> : null}</div> : null}
           </section>
         );
       })}
@@ -36,7 +38,7 @@ export default function Walkthrough({ trace }) {
   );
 }
 
-function Artifact({ op, a }) {
+function Artifact({ op, a, path }) {
   if (op === 'recall') return (
     <ol className="facts">
       {a.concepts.map((c) => <li key={c.id}><span className="fact-id">{c.id}</span><p className="exam">{c.statement}</p><blockquote className="span">{c.sourceSpan}</blockquote>{c.claims?.length ? <span className="muted small">from claim{c.claims.length > 1 ? 's' : ''} {c.claims.join(', ')}</span> : null}</li>)}
@@ -81,7 +83,7 @@ function Artifact({ op, a }) {
       {a.incompleteAlternatives?.length ? (
         <div className="alts">
           <p className="muted">What a learner who skipped a step would conclude (the material the distractors are built from):</p>
-          <ul>{a.incompleteAlternatives.map((x) => <li key={x.skippedStep}><span className={`stepdot step-${x.skippedStep}`}><i aria-hidden="true" />skipped {STEP_LABEL[x.skippedStep] ?? x.skippedStep}</span><p className="exam">{x.statement}</p><p className="muted small">{x.whyWrong}</p></li>)}</ul>
+          <ul>{a.incompleteAlternatives.map((x) => <li key={x.skippedStep}><span className={`stepdot step-${opOfStep(x.skippedStep, path) ?? x.skippedStep}`}><i aria-hidden="true" />skipped {stepTitle(x.skippedStep, path)}</span><p className="exam">{x.statement}</p><p className="muted small">{x.whyWrong}</p></li>)}</ul>
         </div>
       ) : null}
     </div>
