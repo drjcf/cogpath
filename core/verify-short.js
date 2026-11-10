@@ -18,6 +18,7 @@ import { obj, arr, str, enm, bool, assertStrict } from './schema.js';
 import { complete, part } from './llm.js';
 import { runSteps, PREAMBLE } from './executor.js';
 import { descendantIds } from './path.js';
+import { MAX_ANSWER_WORDS } from './ops/assemble-short.js';
 import { spanFound, notesFromClaims, entailedByNotes, notesFor, judgeEntry, verifyGrounding, corruptArtifact, withheldSource } from './verifier.js';
 
 const scenario = (item) => `SCENARIO:\n${item.stem}\n\nQUESTION:\n${item.leadIn}`;
@@ -60,10 +61,10 @@ export async function gradeAnswer({ item, answer, model, label }) {
 
 export async function verifyAnswerability({ trace, source, model }) {
   const item = trace.item;
-  const schema = assertStrict(obj({ answer: str('Your written answer: the decision and the reasoning behind it, 2 to 4 sentences') }));
+  const schema = assertStrict(obj({ answer: str(`Your written answer: the decision and the reasoning behind it, in at most ${MAX_ANSWER_WORDS} words`) }));
   const free = await complete({
     instructions: PREAMBLE,
-    parts: [...source.parts, part.text(`${scenario(item)}\n\nAnswer the question for this scenario from the source. Every constraint the scenario states is binding: do not propose anything the scenario rules out or makes unavailable, and address any acute problem the scenario presents before anything elective. No rubric is provided; state the decision and the reasoning behind it in 2 to 4 sentences.`)],
+    parts: [...source.parts, part.text(`${scenario(item)}\n\nAnswer the question for this scenario from the source. Every constraint the scenario states is binding: do not propose anything the scenario rules out or makes unavailable, and address any acute problem the scenario presents before anything elective. No rubric is provided; state the decision and the reasoning that supports it, not the decision alone, in at most ${MAX_ANSWER_WORDS} words (the length of a model answer).`)],
     schema, schemaName: 'short_answer', effort: 'medium', model, label: 'verify:answerability:answer', maxOutputTokens: 4096,
     mock: () => ({ answer: `[MOCK] ${item.modelAnswer}` }),
   });

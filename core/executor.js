@@ -44,7 +44,8 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
   onEvent?.({ type: 'step:start', step: rec.id, op: op.id, effort: useEffort });
 
   let feedback = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  const maxAttempts = op.maxAttempts ?? 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const parts = [...source.parts, part.text(artifactsBlock(ctx.artifacts, ctx.priorSteps)), part.text(instruction + feedback)];
     const res = await complete({
       instructions: PREAMBLE, parts, schema, schemaName: `${op.id}_output`, effort: useEffort, model,
@@ -69,7 +70,7 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
     rec.reasoningSummary = res.reasoningSummary;
     rec.mock = res.mock;
     rec.problems = problems;
-    if (problems.length === 0 || res.mock) break;
+    if (problems.length === 0 || res.mock || attempt === maxAttempts) break;
     feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${problems.join('\n- ')}`;
     onEvent?.({ type: 'step:retry', step: rec.id, problems });
   }
@@ -144,9 +145,12 @@ export function sumUsage(recs) {
   const u = { input_tokens: 0, output_tokens: 0, cached_tokens: 0, reasoning_tokens: 0, calls: 0 };
   for (const r of recs) {
     for (const a of r.attempts ?? [{ usage: r.usage }]) {
-      if (!a?.usage) continue;
-      u.input_tokens += a.usage.input_tokens ?? 0; u.output_tokens += a.usage.output_tokens ?? 0;
-      u.cached_tokens += a.usage.cached_tokens ?? 0; u.reasoning_tokens += a.usage.reasoning_tokens ?? 0; u.calls++;
+      // an attempt's own call, plus the model-backed checks run on it (verifyAsync)
+      for (const x of [a?.usage, ...[a?.asyncCheck?.usage].flat()]) {
+        if (!x) continue;
+        u.input_tokens += x.input_tokens ?? 0; u.output_tokens += x.output_tokens ?? 0;
+        u.cached_tokens += x.cached_tokens ?? 0; u.reasoning_tokens += x.reasoning_tokens ?? 0; u.calls++;
+      }
     }
   }
   return u;

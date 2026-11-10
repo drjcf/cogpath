@@ -17,6 +17,9 @@ import { stemProblems } from './assemble.js';
 
 export const MAX_ANSWER_WORDS = 110;
 export const MIN_ANSWER_WORDS = 15;
+/** A rubric element is one point. The prompt asks for at most MAX_REQUIREMENT_WORDS; the check allows a little slack so a clause does not cost a retry. */
+export const MAX_REQUIREMENT_WORDS = 25;
+const REQUIREMENT_SLACK = 5;
 
 const words = (t) => String(t ?? '').trim().split(/\s+/).filter(Boolean).length;
 
@@ -25,11 +28,11 @@ export function buildShortSchema(path) {
   return assertStrict(obj({
     stem: str('A vignette: one specific case as a learner would meet it (presentation, relevant history, findings, setting), 3–6 sentences, embedding the case constraint as a concrete feature. It states NO recalled fact, figure, rate, mechanism, judgment, or plan: the learner must bring those. No reference to any source.'),
     constraintSpan: str('The sentence or phrase of the stem (copied from the stem, ≤ 30 words) that shows the case constraint as findings in the vignette\'s own voice; empty string only when the path has no case constraint'),
-    leadIn: str('One question about THIS case that asks for the decision and the reasoning behind it, answerable in 2 to 4 sentences (e.g. "What would you do for this patient, and why?")'),
+    leadIn: str(`One question about THIS case that asks for the decision and the reasoning behind it, answerable in about ${MAX_ANSWER_WORDS} words (e.g. "What would you do for this patient, and why?"). An answer that shows every rubric element is a natural answer to it.`),
     modelAnswer: str(`The answer that earns full credit: the terminal artifact written as a concise written answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words, in the voice of a clinician answering the question. It states the decision and the reasoning, so every rubric element is visible in it.`),
     rubric: arr(obj({
       nodeId: enm(stepIds, 'The path node this element scores'),
-      requirement: str('What an answer must show to earn this element: ONE sentence, a claim a grader can mark met or not met from the answer alone ("Recognizes that …", "Chooses … over … because …", "Names …"). Specific to this case; not a restatement of the question.'),
+      requirement: str(`What an answer must show to earn this element: ONE atomic point in at most ${MAX_REQUIREMENT_WORDS} words, a claim a grader can mark met or not met from the answer alone ("Recognizes that …", "Chooses … over … because …", "Names …"). Do not join two ideas with "and"; if there are two, keep the one this node adds. Specific to this case; not a restatement of the question; and stated in the model answer.`),
       derivedFrom: str('The material this element is built from: a concept id (c*) for a recall node, a relation id (r*) for an analyze node, the best option id (o*) for an evaluate node, "alt:<nodeId>" when a synthesize alternative carries it, or "terminal" for the terminal node'),
       commonError: str('The specific error of an answer that misses this element: what such an answer says or does instead (one sentence)'),
     }), 'Exactly one element per path node, in path order'),
@@ -75,6 +78,7 @@ export default {
   params: {},
   effort: 'high',
   maxOutputTokens: 24576,
+  maxAttempts: 3, // the form checks, the digest check and the answer-vs-rubric check can each need a pass
   schemaFor(ctx) { return buildShortSchema(ctx.path); },
 
   instruction(ctx) {
@@ -95,7 +99,7 @@ Construct:
    - analyze node → the relation the answer must draw, so that it avoids the node's commonMisreading (derivedFrom = a relation id of that node);
    - evaluate node → the choice of the best strategy over the runner-up for the decisive reason (derivedFrom = the best option id of that node);
    - the terminal node → the decision itself, adapted to the case (derivedFrom = "terminal").
-   Each requirement is ONE sentence a grader can mark met or not met from the answer alone, specific to this case, and visible in the model answer. commonError says what an answer that misses it typically says or does instead (one sentence, built from the node's own failure material).
+   Each requirement is ONE atomic point (at most ${MAX_REQUIREMENT_WORDS} words, no two ideas joined by "and") that a grader can mark met or not met from the answer alone, specific to this case. Every requirement must be stated in the model answer in words a grader can quote, so write the model answer and the rubric together and check each element against a sentence of the answer: if the answer does not say it, either add it to the answer (within the word limit) or narrow the requirement to what the answer does say. An answer that shows only the point of that node must earn that element, however it is worded. commonError says what an answer that misses it typically says or does instead (one sentence, built from the node's own failure material).
 
 Never refer to "the article", "the study", "the source", or "the text" anywhere in the item.`;
   },
@@ -111,6 +115,7 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
       const ok = allowedSources(ctx.path, ctx.artifacts, node);
       if (ok.size && !ok.has(e.derivedFrom)) problems.push(`element for "${e.nodeId}" has derivedFrom="${e.derivedFrom}", allowed: ${[...ok].join(', ')}`);
       if (words(e.requirement) < 4) problems.push(`element for "${e.nodeId}" has no usable requirement`);
+      else if (words(e.requirement) > MAX_REQUIREMENT_WORDS + REQUIREMENT_SLACK) problems.push(`element for "${e.nodeId}" is ${words(e.requirement)} words; an element is ONE point in at most ${MAX_REQUIREMENT_WORDS} words (split it and keep the point this node adds)`);
       if (words(e.commonError) < 3) problems.push(`element for "${e.nodeId}" has no usable commonError`);
       if (spanFound(e.requirement, artifact.stem).found) problems.push(`element for "${e.nodeId}" restates the stem; it must name what the learner brings`);
     }
@@ -121,14 +126,29 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
     return problems;
   },
 
-  /** The model answer, as written, must not be entailed by the source's claims: the synthesis may carry an adaptation that the answer then drops. */
+  /**
+   * Two model-backed checks on the assembled item, run together:
+   *  1. the model answer, as written, is not entailed by the source's claims (the synthesis may carry an adaptation that the answer drops);
+   *  2. the model answer earns every element of its own rubric (the in-loop counterpart of the modelAnswerScore verification:
+   *     an element the answer does not show is a defect of the item, found here while the assembler can still fix it).
+   */
   async verifyAsync(artifact, ctx, { model } = {}) {
     const claims = ctx.source?.digest?.claims ?? [];
-    if (!claims.length) return { skipped: true, problems: [] };
-    const notes = notesFromClaims(claims, 'every claim of the source');
-    const r = await entailedByNotes({ statement: artifact.modelAnswer, notes, model, label: 'assemble_short:answer-digest-entailment', mockEntailed: false });
-    const problems = r.entailed ? [`the model answer as written is fully entailed by the source's own claims (${r.citedNotes.join(', ')}); it dropped the adaptation. Rewrite it so it carries what the synthesized plan adds for this case (the clause the source does not state)`] : [];
-    return { skipped: false, entailed: r.entailed, citedNotes: r.citedNotes, missingClause: r.missingClause, usage: r.usage, problems };
+    const { gradeAnswer } = await import('../verify-short.js'); // dynamic: verify-short imports the executor, which imports this module
+    const item = finishShort(artifact);
+    const [ent, grade] = await Promise.all([
+      claims.length ? entailedByNotes({ statement: artifact.modelAnswer, notes: notesFromClaims(claims, 'every claim of the source'), model, label: 'assemble_short:answer-digest-entailment', mockEntailed: false }) : null,
+      gradeAnswer({ item, answer: artifact.modelAnswer, model, label: 'assemble_short:answer-vs-rubric' }),
+    ]);
+    const problems = [];
+    if (ent?.entailed) problems.push(`the model answer as written is fully entailed by the source's own claims (${ent.citedNotes.join(', ')}); it dropped the adaptation. Rewrite it so it carries what the synthesized plan adds for this case (the clause the source does not state)`);
+    const unmet = grade.marks.filter((m) => !m.met).map((m) => item.rubric.find((e) => e.id === m.elementId));
+    for (const e of unmet) problems.push(`the model answer does not earn its own element for "${e.nodeId}" (${e.id}): "${e.requirement}". State that point in the model answer (within ${MAX_ANSWER_WORDS} words), or rewrite the requirement as one point the answer already shows`);
+    return {
+      skipped: false, entailed: ent?.entailed ?? null, citedNotes: ent?.citedNotes ?? [], missingClause: ent?.missingClause ?? null,
+      answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id),
+      usage: [ent?.usage, grade.usage].filter(Boolean), problems,
+    };
   },
 
   mock(ctx) {

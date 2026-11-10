@@ -9,9 +9,10 @@ import { parsePath, formatPath } from '../core/path.js';
 import { toClaudeSchema, assertStrict, validate } from '../core/schema.js';
 import { OPS, ASSEMBLE_SHORT, assemblerFor, FORMATS, schemaOf } from '../core/ops/index.js';
 import { loadSource } from '../core/source.js';
-import { runPath, makeCtx, MAX_MCQ_STEPS } from '../core/executor.js';
+import { runPath, makeCtx, executeOp, sumUsage, MAX_MCQ_STEPS } from '../core/executor.js';
+import { _setClientForTests } from '../core/llm.js';
 import { verifyItem } from '../core/verifier.js';
-import { buildShortSchema, finishShort, shortShapeProblems, allowedSources } from '../core/ops/assemble-short.js';
+import { buildShortSchema, finishShort, shortShapeProblems, allowedSources, MAX_REQUIREMENT_WORDS } from '../core/ops/assemble-short.js';
 import { judgeGrade, judgeElements, shortNecessitySummary, gradeSchema, elementPickSchema, gradeAnswer, pickElements, verifyShortNecessity } from '../core/verify-short.js';
 import { notesFor } from '../core/verifier.js';
 
@@ -227,4 +228,88 @@ test('a full short-answer build with controls: planned, verified deeply, summari
     assert.match(build.items[0].verification.pathNecessity.verdict, /does not establish element e1/);
     assert.equal(build.items[0].verification.summary.pass, false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ─── the item must satisfy its own rubric ───────────────────
+
+const withReal = async (fn) => { const saved = process.env.MOCK_LLM; process.env.MOCK_LLM = '0'; process.env.MODEL_API_KEY = process.env.MODEL_API_KEY || 'test-key'; try { await fn(); } finally { process.env.MOCK_LLM = saved; _setClientForTests(null); } };
+const msg = (json) => ({ id: 'm', model: 'claude-sonnet-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(json) }], usage: { input_tokens: 10, output_tokens: 10 } });
+const isGrade = (body) => Boolean(body.output_config?.format?.schema?.properties?.marks);
+const allMet = (item, answer) => ({ marks: item.rubric.map((e) => ({ elementId: e.id, met: true, evidence: answer.split(/\s+/).slice(1, 5).join(' ') })) });
+
+test('an element is one point: a requirement past the length limit is sent back, a short one passes', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const good = ASSEMBLE_SHORT.mock(ctx);
+  const long = 'Recognizes that the swelling raises pressure behind the eye and that this impairs venous outflow and that the delay in lowering it risks permanent damage to the optic nerve within minutes unless a clinician acts at once at the bedside'.split(' ');
+  assert.ok(long.length > MAX_REQUIREMENT_WORDS + 5);
+  const bad = { ...good, rubric: good.rubric.map((e, i) => (i === 0 ? { ...e, requirement: long.join(' ') } : e)) };
+  assert.ok(ASSEMBLE_SHORT.verify(bad, ctx).some((p) => new RegExp(`element for "${path[0].id}" is ${long.length} words; an element is ONE point in at most ${MAX_REQUIREMENT_WORDS}`).test(p)));
+  assert.deepEqual(ASSEMBLE_SHORT.verify(good, ctx), []);
+  assert.match(ASSEMBLE_SHORT.instruction(ctx), /ONE atomic point/);
+  assert.match(JSON.stringify(buildShortSchema(path)), /Do not join two ideas/);
+});
+
+test('verifyAsync grades the model answer against its own rubric and names every unmet element', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const art = ASSEMBLE_SHORT.mock(ctx);
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => {
+      assert.ok(isGrade(body), 'only the grader is called: the source has no digest, so there is no entailment call');
+      const item = finishShort(art);
+      const g = allMet(item, art.modelAnswer);
+      g.marks[1] = { elementId: 'e2', met: false, evidence: '' };
+      g.marks[3] = { elementId: 'e4', met: true, evidence: 'words that are not in the answer' }; // credited without a quote from the answer
+      return msg(g);
+    } }) } });
+    const r = await ASSEMBLE_SHORT.verifyAsync(art, ctx, { model: 'claude-sonnet-5-5' });
+    assert.equal(r.answerScore, 2); assert.equal(r.answerMax, 4);
+    assert.deepEqual(r.unmet, ['e2', 'e4']);
+    assert.equal(r.problems.length, 2);
+    assert.match(r.problems[0], /does not earn its own element for "analyze" \(e2\)/);
+    assert.match(r.problems[1], /\(e4\)/);
+    assert.equal(r.usage.length, 1);
+  });
+});
+
+test('the assembler retries until the model answer earns every element, and the retry carries the unmet elements', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const mockCtx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const art = ASSEMBLE_SHORT.mock(mockCtx);
+  const seen = [];
+  let grades = 0;
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => {
+      if (!isGrade(body)) { seen.push(body.messages[0].content.at(-1).text); return msg(art); }
+      grades++;
+      const g = allMet(finishShort(art), art.modelAnswer);
+      if (grades <= 2) g.marks[2] = { elementId: 'e3', met: false, evidence: '' };
+      return msg(g);
+    } }) } });
+    const rec = await executeOp({ op: ASSEMBLE_SHORT, source, path, step: { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path.at(-1).id] }, artifacts: trace.artifacts, model: 'claude-sonnet-5-5' });
+    assert.equal(rec.attempts.length, 3, 'the short assembler is allowed a third pass');
+    assert.deepEqual(rec.attempts.map((a) => a.problems.length), [1, 1, 0]);
+    assert.equal(rec.problems.length, 0);
+    assert.equal(seen.length, 3);
+    assert.doesNotMatch(seen[0], /PREVIOUS ATTEMPT WAS REJECTED/);
+    assert.match(seen[1], /PREVIOUS ATTEMPT WAS REJECTED[\s\S]*does not earn its own element for "evaluate" \(e3\)/);
+    // the grader calls are part of the cost: 3 assembler calls + 3 grader calls
+    assert.equal(sumUsage([rec]).calls, 6);
+  });
+});
+
+test('after the last attempt the step stops and reports what is still wrong, rather than retrying forever', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const art = ASSEMBLE_SHORT.mock(makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts }));
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => {
+      if (!isGrade(body)) return msg(art);
+      const g = allMet(finishShort(art), art.modelAnswer); g.marks[0] = { elementId: 'e1', met: false, evidence: '' };
+      return msg(g);
+    } }) } });
+    const rec = await executeOp({ op: ASSEMBLE_SHORT, source, path, step: { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path.at(-1).id] }, artifacts: trace.artifacts, model: 'claude-sonnet-5-5' });
+    assert.equal(rec.attempts.length, 3);
+    assert.equal(rec.problems.length, 1); assert.match(rec.problems[0], /\(e1\)/);
+  });
 });
