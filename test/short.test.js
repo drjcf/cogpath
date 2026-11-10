@@ -11,8 +11,8 @@ import { OPS, ASSEMBLE_SHORT, assemblerFor, FORMATS, schemaOf } from '../core/op
 import { loadSource } from '../core/source.js';
 import { runPath, makeCtx, executeOp, sumUsage, MAX_MCQ_STEPS } from '../core/executor.js';
 import { _setClientForTests } from '../core/llm.js';
-import { verifyItem } from '../core/verifier.js';
-import { buildShortSchema, finishShort, shortShapeProblems, allowedSources, MAX_REQUIREMENT_WORDS, MAX_LEADIN_WORDS } from '../core/ops/assemble-short.js';
+import { verifyItem, assemblyOf } from '../core/verifier.js';
+import { buildShortSchema, finishShort, shortShapeProblems, allowedSources, MAX_REQUIREMENT_WORDS, MAX_LEADIN_WORDS, TARGET_ANSWER_WORDS, MAX_ANSWER_WORDS } from '../core/ops/assemble-short.js';
 import { judgeGrade, judgeElements, shortNecessitySummary, gradeSchema, elementPickSchema, cueSchema, checkCues, gradeAnswer, pickElements, verifyShortNecessity } from '../core/verify-short.js';
 import { notesFor } from '../core/verifier.js';
 
@@ -370,4 +370,62 @@ test('an element that joins several points is sent back, and a lead-in that grow
   assert.deepEqual(ASSEMBLE_SHORT.verify(art, ctx), []);
   assert.match(ASSEMBLE_SHORT.instruction(ctx), /Each part of the lead-in is generic/);
   assert.match(ASSEMBLE_SHORT.instruction(ctx), new RegExp(`at most ${MAX_LEADIN_WORDS} words`));
+});
+
+test('a retry shows the model its previous output and every earlier reason, and the best attempt is kept when the last one regresses', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const good = ASSEMBLE_SHORT.mock(ctx);
+  const a1 = { ...good, rubric: good.rubric.map((e, i) => (i === 1 || i === 2 ? { ...e, derivedFrom: 'c1' } : e)) }; // two form problems
+  const a2 = { ...good, modelAnswer: 'word '.repeat(MAX_ANSWER_WORDS + 3).trim() };                                  // one form problem
+  const seen = [];
+  const replies = [a1, a2, a1];
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => { seen.push(body.messages[0].content.at(-1).text); return msg(replies[seen.length - 1]); } }) } });
+    const rec = await executeOp({ op: ASSEMBLE_SHORT, source, path, step: { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path.at(-1).id] }, artifacts: trace.artifacts, model: 'claude-sonnet-5-5' });
+    assert.deepEqual(rec.attempts.map((a) => a.problems.length), [2, 1, 2]);
+    assert.deepEqual(rec.artifact, a2, 'the attempt with the fewest problems is the one kept');
+    assert.equal(rec.problems.length, 1); assert.match(rec.problems[0], /model answer is 113 words/);
+    // attempt 2 sees attempt 1's output and reasons
+    assert.match(seen[1], /FIX ALL OF THEM:\n- element for "analyze" has derivedFrom="c1"/);
+    assert.ok(seen[1].includes(JSON.stringify(a1)), 'the previous output is shown for correction');
+    assert.doesNotMatch(seen[1], /EARLIER ATTEMPTS/);
+    // attempt 3 sees attempt 2's output, attempt 2's reason as current, and attempt 1's reasons as still binding
+    assert.ok(seen[2].includes(JSON.stringify(a2)));
+    assert.match(seen[2], /FIX ALL OF THEM:\n- the model answer is 113 words/);
+    assert.match(seen[2], /DO NOT REINTRODUCE THEM:\n- element for "analyze" has derivedFrom="c1"[\s\S]*element for "evaluate" has derivedFrom="c1"/);
+  });
+});
+
+test('the instruction lists the derivedFrom values allowed for each node, so a node id is never offered', async () => {
+  const { trace, path, source } = await shortRun(DAG5);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const ins = ASSEMBLE_SHORT.instruction(ctx);
+  assert.match(ins, /derivedFrom is NEVER a node id/);
+  for (const node of path) {
+    const line = ins.split('\n').find((l) => l.includes(`node "${node.id}" (${node.op}):`));
+    assert.ok(line, node.id);
+    for (const id of allowedSources(path, trace.artifacts, node)) assert.ok(line.includes(id), `${node.id} lists ${id}`);
+  }
+  // the recall node named r2 must be offered its concepts, not "r2"
+  const r2 = ins.split('\n').find((l) => l.includes('node "r2" (recall):'));
+  assert.ok(/\bc\d\b/.test(r2) && !/: r2\b|\| r2\b/.test(r2), r2);
+  assert.match(ins, new RegExp(`15 to ${TARGET_ANSWER_WORDS} words \\(count them; the limit is ${MAX_ANSWER_WORDS}\\)`));
+});
+
+test('an item whose assembly ended with unresolved problems cannot pass, in either format; clean items keep their check counts', async () => {
+  const { trace, source } = await shortRun(LINEAR);
+  assert.equal(assemblyOf(trace), null);
+  const clean = await verifyItem({ trace, source, model: 'mock' });
+  assert.equal(clean.assembly, null); assert.equal(clean.summary.checks.assembly, null); assert.equal(clean.summary.pass, true);
+  const dirty = { ...trace, assemble: { ...trace.assemble, problems: ['stem states figures from recalled fact c1 (90); remove them'] } };
+  const v = await verifyItem({ trace: dirty, source, model: 'mock' });
+  assert.equal(v.summary.checks.assembly, false); assert.equal(v.summary.pass, false);
+  assert.equal(v.summary.applicable, clean.summary.applicable + 1);
+  assert.deepEqual(v.assembly.problems, dirty.assemble.problems);
+  // multiple choice too
+  const mcq = await runPath({ source, path: parsePath(LINEAR), model: 'mock' });
+  const mv = await verifyItem({ trace: { ...mcq, assemble: { ...mcq.assemble, problems: ['x'] } }, source, model: 'mock' });
+  assert.equal(mv.summary.checks.assembly, false); assert.equal(mv.summary.pass, false);
+  assert.equal((await verifyItem({ trace: mcq, source, model: 'mock' })).assembly, null);
 });

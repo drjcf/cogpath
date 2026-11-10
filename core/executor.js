@@ -44,6 +44,8 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
   onEvent?.({ type: 'step:start', step: rec.id, op: op.id, effort: useEffort });
 
   let feedback = '';
+  const earlier = []; // reasons earlier attempts were rejected for
+  let best = null;     // the attempt with the fewest problems (the latest on a tie): a later attempt can regress
   const maxAttempts = op.maxAttempts ?? 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const parts = [...source.parts, part.text(artifactsBlock(ctx.artifacts, ctx.priorSteps)), part.text(instruction + feedback)];
@@ -70,10 +72,17 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
     rec.reasoningSummary = res.reasoningSummary;
     rec.mock = res.mock;
     rec.problems = problems;
+    if (!best || problems.length <= best.problems.length) best = { artifact: res.json, problems, usage: res.usage, rawUsage: res.rawUsage ?? null, reasoningSummary: res.reasoningSummary, mock: res.mock };
     if (problems.length === 0 || res.mock || attempt === maxAttempts) break;
-    feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${problems.join('\n- ')}`;
+    // The retry is a fresh call, so it is shown its previous output (to correct, not to regenerate) and every reason given so far.
+    const stillBinding = [...new Set(earlier)].filter((p) => !problems.includes(p));
+    feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${problems.join('\n- ')}`
+      + (stillBinding.length ? `\n\nEARLIER ATTEMPTS WERE ALSO REJECTED FOR THESE REASONS; DO NOT REINTRODUCE THEM:\n- ${stillBinding.join('\n- ')}` : '')
+      + `\n\nYOUR PREVIOUS ATTEMPT, to be corrected (change only what the reasons require and keep everything else):\n${JSON.stringify(res.json)}`;
+    earlier.push(...problems);
     onEvent?.({ type: 'step:retry', step: rec.id, problems });
   }
+  if (best && rec.artifact !== best.artifact) Object.assign(rec, { artifact: best.artifact, problems: best.problems, usage: best.usage, rawUsage: best.rawUsage, reasoningSummary: best.reasoningSummary, mock: best.mock });
   onEvent?.({ type: 'step:done', step: rec.id, op: op.id, problems: rec.problems, usage: rec.usage, ms: rec.ms });
   return rec;
 }

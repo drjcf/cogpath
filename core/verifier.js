@@ -333,6 +333,12 @@ export async function verifyDistractorMapping({ trace, source, model, onEvent })
 
 // ─── runner ─────────────────────────────────────────────────
 
+/** An item whose assembly ended with unresolved problems (a stem that states a recalled figure, a link to the wrong id) cannot pass whatever else holds. Null when clean, so clean items keep their check counts. */
+export function assemblyOf(trace) {
+  const problems = trace.assemble?.problems ?? [];
+  return problems.length ? { pass: false, problems } : null;
+}
+
 export async function verifyItem({ trace, source, model, deep = false, onEvent }) {
   if ((trace.item?.format ?? 'mcq') === 'short') return (await import('./verify-short.js')).verifyShortItem({ trace, source, model, deep, onEvent });
   const grounding = verifyGrounding(trace, source.text);
@@ -343,6 +349,7 @@ export async function verifyItem({ trace, source, model, deep = false, onEvent }
   onEvent?.({ type: 'verify:digestRecall', ...digestRecall });
   const pathNecessity = await verifyPathNecessity({ trace, model, onEvent });
   const distractorMapping = deep ? await verifyDistractorMapping({ trace, source, model, onEvent }) : null;
+  const assembly = assemblyOf(trace);
   const checks = [
     ['grounding', grounding.skipped ? null : grounding.pass],
     ['coverTheOptions', coverTheOptions.pass],
@@ -350,10 +357,11 @@ export async function verifyItem({ trace, source, model, deep = false, onEvent }
     ['digestRecall', digestRecall.skipped ? null : digestRecall.pass],
     ['pathNecessity', pathNecessity.pass],
     ['distractorMapping', distractorMapping ? distractorMapping.pass : null],
+    ['assembly', assembly ? false : null],
   ];
   const applicable = checks.filter(([, v]) => v !== null);
   return {
-    grounding, coverTheOptions, sourceRecall, digestRecall, pathNecessity, distractorMapping,
+    grounding, coverTheOptions, sourceRecall, digestRecall, pathNecessity, distractorMapping, assembly,
     summary: { passed: applicable.filter(([, v]) => v).length, applicable: applicable.length, pass: applicable.every(([, v]) => v), checks: Object.fromEntries(checks) },
   };
 }

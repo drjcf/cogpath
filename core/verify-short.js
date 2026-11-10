@@ -19,7 +19,7 @@ import { complete, part } from './llm.js';
 import { runSteps, PREAMBLE } from './executor.js';
 import { descendantIds } from './path.js';
 import { MAX_ANSWER_WORDS } from './ops/assemble-short.js';
-import { spanFound, notesFromClaims, entailedByNotes, notesFor, judgeEntry, verifyGrounding, corruptArtifact, withheldSource } from './verifier.js';
+import { spanFound, notesFromClaims, entailedByNotes, notesFor, judgeEntry, verifyGrounding, corruptArtifact, withheldSource, assemblyOf } from './verifier.js';
 
 const scenario = (item) => `SCENARIO:\n${item.stem}\n\nQUESTION:\n${item.leadIn}`;
 const rubricText = (item) => item.rubric.map((e) => `${e.id}: ${e.requirement}`).join('\n');
@@ -251,6 +251,7 @@ export async function verifyShortItem({ trace, source, model, deep = false, onEv
   onEvent?.({ type: 'verify:digestRecall', ...digestRecall });
   const pathNecessity = await verifyShortNecessity({ trace, model, onEvent });
   const elementMapping = deep ? await verifyElementMapping({ trace, source, model, onEvent }) : null;
+  const assembly = assemblyOf(trace);
   const checks = [
     ['grounding', grounding.skipped ? null : grounding.pass],
     ['answerability', answerability.pass],
@@ -259,10 +260,11 @@ export async function verifyShortItem({ trace, source, model, deep = false, onEv
     ['digestRecall', digestRecall.skipped ? null : digestRecall.pass],
     ['pathNecessity', pathNecessity.pass],
     ['elementMapping', elementMapping ? elementMapping.pass : null],
+    ['assembly', assembly ? false : null],
   ];
   const applicable = checks.filter(([, v]) => v !== null);
   return {
-    format: 'short', grounding, answerability, modelAnswerScore, sourceRecall, digestRecall, pathNecessity, elementMapping,
+    format: 'short', grounding, answerability, modelAnswerScore, sourceRecall, digestRecall, pathNecessity, elementMapping, assembly,
     summary: { passed: applicable.filter(([, v]) => v).length, applicable: applicable.length, pass: applicable.every(([, v]) => v), checks: Object.fromEntries(checks) },
   };
 }

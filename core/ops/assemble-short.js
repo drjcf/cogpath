@@ -17,6 +17,8 @@ import { stemProblems } from './assemble.js';
 
 export const MAX_ANSWER_WORDS = 110;
 export const MIN_ANSWER_WORDS = 15;
+/** What the prompt asks for; the check allows up to MAX_ANSWER_WORDS, so a model that runs a little over does not cost a retry. */
+export const TARGET_ANSWER_WORDS = MAX_ANSWER_WORDS - 10;
 /** A rubric element is one point. The prompt asks for at most MAX_REQUIREMENT_WORDS; the check allows a little slack so a clause does not cost a retry. */
 export const MAX_REQUIREMENT_WORDS = 25;
 /** A lead-in that grows a clause per rubric element becomes a checklist; it stays a question. */
@@ -31,7 +33,7 @@ export function buildShortSchema(path) {
     stem: str('A vignette: one specific case as a learner would meet it (presentation, relevant history, findings, setting), 3–6 sentences, embedding the case constraint as a concrete feature. It states NO recalled fact, figure, rate, mechanism, judgment, or plan: the learner must bring those. No reference to any source.'),
     constraintSpan: str('The sentence or phrase of the stem (copied from the stem, ≤ 30 words) that shows the case constraint as findings in the vignette\'s own voice; empty string only when the path has no case constraint'),
     leadIn: str(`ONE question (one question mark) about THIS case, answerable in about ${MAX_ANSWER_WORDS} words, worded so that every rubric element is something it asks for: the decision, what is going on or why it matters, and why this choice rather than the alternatives (e.g. "What is happening to this patient, what would you do right now, and why that rather than the alternatives?"). It names no fact, mechanism, or option.`),
-    modelAnswer: str(`The answer that earns full credit: the terminal artifact written as a concise written answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words, in the voice of a clinician answering the question. It states the decision and the reasoning, so every rubric element is visible in it.`),
+    modelAnswer: str(`The answer that earns full credit: the terminal artifact written as a concise written answer of ${MIN_ANSWER_WORDS} to ${TARGET_ANSWER_WORDS} words, in the voice of a clinician answering the question. It states the decision and the reasoning, so every rubric element is visible in it.`),
     rubric: arr(obj({
       nodeId: enm(stepIds, 'The path node this element scores'),
       requirement: str(`What an answer must show to earn this element: ONE atomic point in at most ${MAX_REQUIREMENT_WORDS} words, a claim a grader can mark met or not met from the answer alone ("Recognizes that …", "Chooses … over … because …", "Names …"). Do not join two ideas with "and"; if there are two, keep the one this node adds. Specific to this case; not a restatement of the question; and stated in the model answer.`),
@@ -95,12 +97,14 @@ Construct:
    constraintSpan is "" (the path has no case constraint).`}
    The stem states NONE of the recalled facts, figures, rates, incidences, study results, mechanisms, judgments, or plans; the learner must bring them.
 2. A lead-in that is ONE question (one question mark, which may have several parts) worded so that every rubric element is something the question asks for. An expert who answers it fully, from the source and without seeing the rubric, must have reason to say each element; "What would you do, and why?" alone cues only the decision, not the mechanism or the comparison. Cue each kind of element by what it needs: a fact node by asking what is going on or why it matters, a relation node by asking what the findings show, an evaluate node by asking why this choice rather than the alternatives, the terminal node by asking what to do. For example: "What is happening to this patient, what would you do right now, and why that rather than the alternatives?" Each part of the lead-in is generic, a question that could be asked of any case in this field ("what is happening", "how urgent is it", "what would you do", "why that rather than the alternatives"); it never points at a feature, a finding, or the time course of this case, and it is at most ${MAX_LEADIN_WORDS} words. The lead-in names no fact, mechanism, or option. No options are given.
-3. A model answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words: the "${terminal.op}" artifact of step "${terminal.id}" written as the answer a strong clinician would give, with its reasoning. It must carry what the synthesized plan adds for this case; an answer that only repeats what the source recommends is not the model answer.
+3. A model answer of ${MIN_ANSWER_WORDS} to ${TARGET_ANSWER_WORDS} words (count them; the limit is ${MAX_ANSWER_WORDS}): the "${terminal.op}" artifact of step "${terminal.id}" written as the answer a strong clinician would give, with its reasoning. It must carry what the synthesized plan adds for this case; an answer that only repeats what the source recommends is not the model answer.
 4. A rubric with EXACTLY ONE element per path node, in path order (${ctx.path.map((s) => s.id).join(', ')}). An element is what an answer must show to earn credit at that node:
    - recall node → the fact(s) the answer must bring (derivedFrom = one of that node's concept ids);
    - analyze node → the relation the answer must draw, so that it avoids the node's commonMisreading (derivedFrom = a relation id of that node);
    - evaluate node → the choice of the best strategy over the runner-up for the decisive reason (derivedFrom = the best option id of that node);
    - the terminal node → the decision itself, adapted to the case (derivedFrom = "terminal").
+   derivedFrom is NEVER a node id. The values allowed for each node are exactly:
+${ctx.path.map((s) => `   - node "${s.id}" (${s.op}): ${[...allowedSources(ctx.path, ctx.artifacts, s)].join(' | ')}`).join('\n')}
    Each requirement is ONE atomic point (at most ${MAX_REQUIREMENT_WORDS} words, no two ideas joined by "and") that a grader can mark met or not met from the answer alone, specific to this case. Every requirement must be stated in the model answer in words a grader can quote, so write the model answer and the rubric together and check each element against a sentence of the answer: if the answer does not say it, either add it to the answer (within the word limit) or narrow the requirement to what the answer does say. An answer that shows only the point of that node must earn that element, however it is worded. commonError says what an answer that misses it typically says or does instead (one sentence, built from the node's own failure material).
 
 Never refer to "the article", "the study", "the source", or "the text" anywhere in the item.`;

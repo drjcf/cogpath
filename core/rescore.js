@@ -62,6 +62,7 @@ function rescoreShortItem(it, note) {
     ['grounding', v.grounding?.skipped ? null : v.grounding?.pass ?? null], ['answerability', v.answerability?.pass ?? null], ['modelAnswerScore', v.modelAnswerScore?.pass ?? null],
     ['sourceRecall', !v.sourceRecall || v.sourceRecall.skipped ? null : v.sourceRecall.pass], ['digestRecall', !v.digestRecall || v.digestRecall.skipped ? null : v.digestRecall.pass],
     ['pathNecessity', pn ? pn.pass : null], ['elementMapping', em ? em.pass : null],
+    ['assembly', v.assembly ? false : null],
   ]);
 }
 
@@ -123,6 +124,7 @@ export async function rescoreBuild(build) {
       ['grounding', v.grounding?.skipped ? null : v.grounding?.pass ?? null], ['coverTheOptions', v.coverTheOptions?.pass ?? null],
       ['sourceRecall', !v.sourceRecall || v.sourceRecall.skipped ? null : v.sourceRecall.pass], ['digestRecall', !v.digestRecall || v.digestRecall.skipped ? null : v.digestRecall.pass],
       ['pathNecessity', pn ? pn.pass : null], ['distractorMapping', dm ? dm.pass : null],
+      ['assembly', v.assembly ? false : null],
     ]);
   }
   for (const bl of build.baselines ?? []) {

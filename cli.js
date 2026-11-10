@@ -438,6 +438,7 @@ function printTrace(trace) {
     if (v.sourceRecall && !v.sourceRecall.skipped) console.log(`  sourceRecall     ${v.sourceRecall.pass ? '✓' : '✗'} ${v.sourceRecall.verdict}`);
     if (v.digestRecall && !v.digestRecall.skipped) console.log(`  digestRecall     ${v.digestRecall.pass ? '✓' : '✗'} ${v.digestRecall.verdict}`);
     console.log(`  pathNecessity    ${v.pathNecessity.pass ? '✓' : '✗'} picks by notes depth: ${v.pathNecessity.picks.map((p) => `k${p.k}=${p.choice}${p.override ? `(raw ${p.raw})` : ''}`).join(' ')} → ${v.pathNecessity.verdict}${v.pathNecessity.leaksContained ? ` · ${v.pathNecessity.leaksContained} outside-knowledge pick(s) contained` : ''}`);
+    if (v.assembly) console.log(`  assembly         ✗ unresolved after the last attempt: ${v.assembly.problems.join('; ')}`);
     if (v.distractorMapping) console.log(`  distractorMapping ${v.distractorMapping.pass ? '✓' : '✗'} key blocked ${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}, landed ${v.distractorMapping.landed}/${v.distractorMapping.total}: ${v.distractorMapping.perStep.map((p) => `${p.step}→${p.picked}${p.picked === 'UNDETERMINED' && p.lean ? '~' + p.lean : ''}${p.landed ? '' : '(exp ' + p.expected.join('/') + ')'}`).join(' ')}`);
   }
 }
@@ -467,6 +468,7 @@ function printShortVerification(v) {
   if (v.sourceRecall && !v.sourceRecall.skipped) console.log(`  sourceRecall     ${mark(v.sourceRecall.pass)} ${v.sourceRecall.verdict}`);
   if (v.digestRecall && !v.digestRecall.skipped) console.log(`  digestRecall     ${mark(v.digestRecall.pass)} ${v.digestRecall.verdict}`);
   console.log(`  pathNecessity    ${mark(v.pathNecessity.pass)} elements established by notes: ${v.pathNecessity.picks.map((p) => `${p.without ? `w/o ${p.without}` : 'all'}=${p.entailed.join('+') || 'none'}`).join(' ')} → ${v.pathNecessity.verdict}`);
+  if (v.assembly) console.log(`  assembly         ✗ unresolved after the last attempt: ${v.assembly.problems.join('; ')}`);
   if (v.elementMapping) console.log(`  elementMapping   ${mark(v.elementMapping.pass)} final element blocked ${v.elementMapping.terminalBlocked}/${v.elementMapping.total}, own element broken ${v.elementMapping.ownBroken}/${v.elementMapping.total}`);
 }
 
