@@ -68,7 +68,7 @@ export async function saveIngest({ source, result, model }) {
   const prior = await b.readMeta(sha12);
   const meta = {
     sha: source.sha, title: result.digest.title || source.title, path: source.path, kind: source.kind, words: source.text ? source.text.trim().split(/\s+/).length : 0,
-    fileId: source.fileId ?? null, ingestedAt: new Date().toISOString(), model: result.model ?? model ?? null, mock: Boolean(result.mock),
+    ingestedAt: new Date().toISOString(), model: result.model ?? model ?? null, mock: Boolean(result.mock),
     claims: result.digest.claims.length, maxClaims: result.maxClaims ?? null, dropped: result.dropped, attempts: result.attempts.map((a) => ({ attempt: a.attempt, claims: a.claims, dropped: a.dropped.length, usage: a.usage, ms: a.ms })), totals: result.totals,
     audit: result.audit ?? null,
     review: { status: 'draft' },
@@ -399,10 +399,6 @@ export async function exportAll(summarize, { status = 'certified' } = {}) {
   return out;
 }
 export async function listBuildEvents(id, opts) { return (await store()).readBuildEvents(id, opts); }
-
-// ── Files API cache (PDF uploads to the model provider) ──
-export async function readFileCache() { return (await store()).readFileCache(); }
-export async function writeFileCache(c) { return (await store()).writeFileCache(c); }
 
 // ── jobs ──
 export async function createJob({ kind, params, by }) {

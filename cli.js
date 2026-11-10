@@ -10,7 +10,7 @@
  *   cogpath unapprove <source|sha> [--note "…"]                                         back to draft
  *   cogpath sources                                                                    list ingested sources
  *   cogpath digest <source|sha> [--json] [--review]                                    print the digest as the steps see it; --review: each claim with its page and passage
- *   cogpath run <source.pdf|.md|.txt|sha> "<path>" [--source auto|digest|both|raw] [--model muse-spark-1.3] [--effort high] [--deep] [--no-verify] [--out runs] [--seed 7] [--json] [--inline-text]
+ *   cogpath run <source.pdf|.md|.txt|sha> "<path>" [--source auto|digest|both|raw] [--model claude-sonnet-5-5] [--effort high] [--deep] [--no-verify] [--out runs] [--seed 7] [--json] [--inline-text]
  *   cogpath build <source|sha> --items N [--path "…"] [--deep] [--baseline] [--seed n] [--model]   N distinct items from one approved digest (+ single-shot controls)
  *   cogpath show <runs/run-….json>
  *   cogpath rescore <build-id|runs/builds/….json|all> [--write]   re-judge a build's stored picks under the current local rules (no model calls); --write updates the record
@@ -31,7 +31,7 @@ import { summarize } from './core/build.js';
 import { rescoreBuild } from './core/rescore.js';
 import { loadIngest, listSources, shortSha, resolveSha, sourceDir, approveIngest, unapproveIngest, writeDigest, saveRun, loadBuild, listBuilds, storeName } from './core/store.js';
 import { renderDigest, reviewPassage, checkDigest, locateClaims, CLAIM_TYPES, ATTRIBUTIONS, SECTIONS } from './core/ingest.js';
-import { DEFAULT_MODEL, DEFAULT_CACHE_RETENTION, isMock, complete, part } from './core/meta.js';
+import { DEFAULT_MODEL, DEFAULT_CACHE_TTL, isMock, complete, part } from './core/llm.js';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -195,7 +195,7 @@ async function loadApprovedSource(srcArg, wantMode, log) {
     raw = sourceFromStore(await loadIngest(byName.sha));
   } else raw = await loadSource(srcArg, { inlineText: has('inline-text') || wantMode === 'digest' || (wantMode === 'auto' && await hasIngest(srcArg)) });
   if (raw.fromStore && wantMode === 'raw') log('[cogpath] note: raw mode on a stored source sends the stored text inline (no file upload)');
-  log(`[cogpath] source: ${raw.kind} "${raw.title}" (${raw.text ? raw.text.split(/\s+/).length : '?'} words${raw.fileId ? `, ${raw.fileId}${raw.fileCached ? ' cached' : ''}` : ''}, sha ${shortSha(raw.sha)}${raw.fromStore ? ', from store' : ''})`);
+  log(`[cogpath] source: ${raw.kind} "${raw.title}" (${raw.text ? raw.text.split(/\s+/).length : '?'} words, sha ${shortSha(raw.sha)}${raw.fromStore ? ', from store' : ''})`);
   const ing = wantMode === 'raw' ? null : await loadIngest(raw.sha);
   if (!ing && (wantMode === 'digest' || wantMode === 'both')) die(`source not ingested; run: node cli.js ingest ${srcArg}`);
   if (ing?.stale) die(`digest ${shortSha(raw.sha)} was written by an older ingest; re-ingest: node cli.js ingest ${srcArg} --inline-text --force`);
@@ -281,7 +281,7 @@ async function ingest() {
   const maxClaims = claimsArg === 'auto' ? undefined : Number(claimsArg);
   if (maxClaims !== undefined && (!Number.isInteger(maxClaims) || maxClaims < 8 || maxClaims > 120)) die('--claims must be "auto" or an integer between 8 and 120');
   const source = await loadSource(srcArg, { inlineText: has('inline-text') });
-  console.error(`[ingest] ${isMock() ? 'MOCK ' : ''}model=${model} source: ${source.kind} "${source.title}" (${source.text ? source.text.split(/\s+/).length : '?'} words${source.fileId ? `, ${source.fileId}` : ''}, sha ${shortSha(source.sha)})`);
+  console.error(`[ingest] ${isMock() ? 'MOCK ' : ''}model=${model} source: ${source.kind} "${source.title}" (${source.text ? source.text.split(/\s+/).length : '?'} words, sha ${shortSha(source.sha)})`);
   const existing = await loadIngest(source.sha);
   if (existing && !has('force')) {
     console.error(`[ingest] already ingested (${existing.digest.claims.length} claims, ${existing.meta.ingestedAt.slice(0, 16)}) at ${existing.dir ?? shortSha(source.sha)}; use --force to redo`);
@@ -362,27 +362,28 @@ async function audit() {
 /**
  * Prefix-cache probe. Same source, five calls:
  *   1. recall            2. recall again (identical request)      3. analyze (same source prefix, different schema + tail)
- * Prints input/cached tokens and the raw usage object of each, so the question "does caching engage, and
- * does the schema or the file break it" is answered by numbers rather than guesses.
+ *   4. plain             5. plain again (no schema)
+ * Prints input/cached/cache-write tokens and the raw usage object of each, so the question "does caching engage, and
+ * does the schema or the effort break it" is answered by numbers rather than guesses.
  */
 async function probeCache() {
   const [srcArg] = positional;
   if (!srcArg) die('probe-cache needs <source>');
   const model = flag('model', DEFAULT_MODEL);
   const source = await loadSource(srcArg, { inlineText: has('inline-text') });
-  console.error(`[probe] ${isMock() ? 'MOCK ' : ''}model=${model} source: ${source.kind} "${source.title}" (${source.text ? source.text.split(/\s+/).length : '?'} words${source.fileId ? `, ${source.fileId}` : ''})`);
-  console.error(`[probe] prompt_cache_key=${source.cacheKey} retention=${DEFAULT_CACHE_RETENTION}`);
+  console.error(`[probe] ${isMock() ? 'MOCK ' : ''}model=${model} source: ${source.kind} "${source.title}" (${source.text ? source.text.split(/\s+/).length : '?'} words)`);
+  console.error(`[probe] cache ttl=${DEFAULT_CACHE_TTL} (breakpoint on the last source part)`);
   const steps = parsePath('recall(3) > analyze(causal)');
   const ctx = (i, artifacts) => ({ source, path: steps, step: steps[i], priorSteps: steps.slice(0, i), artifacts });
   const report = (label, res) => {
-    console.log(`${label.padEnd(18)} ${String(res.usage.input_tokens).padStart(7)} in  ${String(res.usage.cached_tokens).padStart(7)} cached  ${String(res.usage.output_tokens).padStart(6)} out  ${res.ms} ms${res.notes?.length ? '  ' + res.notes.join('; ') : ''}`);
+    console.log(`${label.padEnd(18)} ${String(res.usage.input_tokens).padStart(7)} in  ${String(res.usage.cached_tokens).padStart(7)} cached ${String(res.usage.cache_write_tokens ?? 0).padStart(7)} written  ${String(res.usage.output_tokens).padStart(6)} out  ${res.ms} ms${res.notes?.length ? '  ' + res.notes.join('; ') : ''}`);
     console.log(`                   raw usage: ${JSON.stringify(res.rawUsage ?? res.usage)}`);
   };
   const call = async (label, op, artifacts, i) => {
     const c = ctx(i, artifacts);
     const res = await complete({
       instructions: PREAMBLE, parts: [...source.parts, part.text(artifactsBlock(artifacts, steps)), part.text(op.instruction(c))],
-      schema: schemaOf(op, c), schemaName: `${op.id}_output`, effort: 'minimal', model, maxOutputTokens: 8192, label: `probe:${label}`, cacheKey: source.cacheKey, mock: () => op.mock(c),
+      schema: schemaOf(op, c), schemaName: `${op.id}_output`, effort: 'low', model, maxOutputTokens: 8192, label: `probe:${label}`, mock: () => op.mock(c),
     });
     report(label, res);
     return res.json;
@@ -390,7 +391,7 @@ async function probeCache() {
   const plain = async (label) => {
     const res = await complete({
       instructions: PREAMBLE, parts: [...source.parts, part.text('Reply with the single word OK.')],
-      effort: 'minimal', model, maxOutputTokens: 1024, label: `probe:${label}`, cacheKey: source.cacheKey, mock: () => 'OK',
+      effort: 'low', model, maxOutputTokens: 1024, label: `probe:${label}`, mock: () => 'OK',
     });
     report(label, res);
   };
@@ -401,10 +402,11 @@ async function probeCache() {
   await plain('plain #2 (same)');
   console.log(`
 Reading the numbers:
-  recall #2 cached ≈ #1 in     caching works with the cache key; a 0 on step 2+ of a run then means the schema or tail breaks the prefix
+  recall #2 cached ≈ #1 in     caching works; "written" on #1 and "cached" on #2 is the pattern
   analyze cached > 0           the source prefix survives a schema change: runs should show cached ≥ source tokens from step 2 on
-  plain #2 cached > 0 only     structured output (json_schema) is what disables caching
-  all zero                     caching is not engaging for this source type even with a key; compare with/without --inline-text`);
+  analyze cached = 0           a new output_config.format (or effort) invalidates the prefix: cross-step reuse is lost, same-step reuse still holds
+  plain #2 cached > 0 only     structured output (output_config.format) is what disables caching
+  all zero                     below the minimum cacheable length (512 tokens on Sonnet 5.5) or the prefix changed between calls`);
 }
 
 function printTrace(trace) {

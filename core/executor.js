@@ -2,13 +2,13 @@
  * Executes a cognitive path over a source: one structured-output call per step, each step seeing the
  * source plus every earlier artifact, then the ASSEMBLE op builds the item.
  *
- * Every call shares the same prefix (framework preamble + source) so the Responses API prefix cache
+ * Every call shares the same prefix (framework preamble + source) so the prompt cache
  * covers the source after the first step.
  */
 import { randomBytes } from 'node:crypto';
 import { getOp, ASSEMBLE, schemaOf } from './ops/index.js';
 import { validate } from './schema.js';
-import { complete, part, DEFAULT_MODEL } from './meta.js';
+import { complete, part, DEFAULT_MODEL } from './llm.js';
 import { letterOptions } from './ops/assemble.js';
 import { formatPath } from './path.js';
 import { wordCount } from './source.js';
@@ -43,7 +43,7 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
     const parts = [...source.parts, part.text(artifactsBlock(artifacts, path)), part.text(instruction + feedback)];
     const res = await complete({
       instructions: PREAMBLE, parts, schema, schemaName: `${op.id}_output`, effort: useEffort, model,
-      maxOutputTokens: op.maxOutputTokens, summary: 'auto', label: `${label ?? ''}${step.id}`, cacheKey: source.cacheKey, mock: () => op.mock(ctx),
+      maxOutputTokens: op.maxOutputTokens, summary: 'auto', label: `${label ?? ''}${step.id}`, mock: () => op.mock(ctx),
     });
     if (res.notes?.length) rec.notes = [...(rec.notes ?? []), ...res.notes];
     const problems = [];
@@ -94,7 +94,7 @@ export async function runPath({ source, path, model = DEFAULT_MODEL, effort, onE
   const t0 = Date.now();
   const trace = {
     id, status: 'running', createdAt: new Date().toISOString(),
-    source: { kind: source.kind, title: source.title, path: source.path, sha: source.sha ?? null, fileId: source.fileId, words: wordCount(source.text), mode: source.mode ?? 'raw', digestClaims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null, focus: source.focus ?? null },
+    source: { kind: source.kind, title: source.title, path: source.path, sha: source.sha ?? null, words: wordCount(source.text), mode: source.mode ?? 'raw', digestClaims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null, focus: source.focus ?? null },
     model, pathText: formatPath(path), path, steps: [], artifacts: {}, assemble: null, item: null, totals: null, verification: null, error: null,
   };
   try {

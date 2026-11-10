@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-process.env.MOCK_META = '1';
+process.env.MOCK_LLM = '1';
 process.env.COGPATH_DATA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../runs');
 const { parsePath } = await import('../core/path.js');
 const { loadSource } = await import('../core/source.js');
@@ -105,7 +105,7 @@ test('synthesize corruption is local, uses the own-step alternative, and drops w
   assert.equal(scrubCorruptedQuotes(origR, corrR).relations[0].evidenceSpan, '');
 });
 
-test('loadSource --inline-text sends extracted PDF text inline and never uploads', async () => {
+test('loadSource sends a PDF as a cached document block, or with --inline-text as plain text', async () => {
   const fs = await import('node:fs');
   const tmp = path.resolve(process.env.COGPATH_DATA, 'inline-probe.pdf');
   // minimal single-page PDF with a text layer
@@ -113,12 +113,20 @@ test('loadSource --inline-text sends extracted PDF text inline and never uploads
   fs.mkdirSync(path.dirname(tmp), { recursive: true });
   fs.writeFileSync(tmp, pdf);
   try {
+    const doc = await loadSource(tmp);
+    assert.equal(doc.kind, 'pdf');
+    assert.equal(doc.parts.length, 1);
+    assert.equal(doc.parts[0].type, 'document');
+    assert.equal(doc.parts[0].source.media_type, 'application/pdf');
+    assert.equal(Buffer.from(doc.parts[0].source.data, 'base64').toString('latin1').slice(0, 8), '%PDF-1.1');
+    assert.equal(doc.parts[0].cache, true, 'the document ends the cached prefix');
+    assert.match(doc.text, /Retrobulbar hematoma is an emergency/, 'text is still extracted locally for grounding');
     const src = await loadSource(tmp, { inlineText: true });
     assert.equal(src.kind, 'pdf-text');
-    assert.equal(src.fileId, null);
     assert.match(src.text, /Retrobulbar hematoma is an emergency/);
     assert.equal(src.parts.length, 1);
-    assert.equal(src.parts[0].type, 'input_text');
+    assert.equal(src.parts[0].type, 'text');
+    assert.equal(src.parts[0].cache, true);
     assert.match(src.parts[0].text, /^SOURCE \(inline probe\):/);
   } finally { fs.rmSync(tmp, { force: true }); }
 });
@@ -177,9 +185,12 @@ test('ingest → store → digest-mode run: claims are grounded, recall cites cl
     assert.equal(src.mode, 'digest');
     assert.equal(src.parts.length, 1);
     assert.match(src.parts[0].text, /^SOURCE DIGEST/);
-    assert.notEqual(src.cacheKey, raw.cacheKey);
+    assert.notDeepEqual(src.parts, raw.parts);
+    assert.equal(src.parts[0].cache, true);
     assert.equal(src.text, raw.text); // grounding still checks the raw text
-    assert.equal(withDigest(raw, loaded.digest, 'both').parts.length, 2);
+    const both = withDigest(raw, loaded.digest, 'both');
+    assert.equal(both.parts.length, 2);
+    assert.deepEqual(both.parts.map((x) => Boolean(x.cache)), [false, true], 'only the last part of the prefix carries the breakpoint');
     assert.equal(withDigest(raw, null, 'digest').mode, 'raw');
     assert.ok(renderDigest(loaded.digest).includes(loaded.digest.claims[0].span));
 

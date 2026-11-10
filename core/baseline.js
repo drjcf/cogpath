@@ -7,7 +7,7 @@
  * which is the point of the comparison.
  */
 import { obj, arr, str, bool, assertStrict, validate } from './schema.js';
-import { complete, part } from './meta.js';
+import { complete, part } from './llm.js';
 import { PREAMBLE } from './executor.js';
 import { itemShapeProblems } from './ops/assemble.js';
 import { verifyCoverTheOptions, verifySourceRecall, verifyDigestRecall, spanFound } from './verifier.js';
@@ -66,7 +66,7 @@ export async function runBaseline({ source, focus, model, seed, label = 'baselin
   for (let attempt = 1; attempt <= 2; attempt++) {
     const res = await complete({
       instructions: PREAMBLE, parts: [...source.parts, part.text(instruction + feedback)],
-      schema: BASELINE_SCHEMA, schemaName: 'baseline_item', effort: 'high', model, maxOutputTokens: 16384, summary: 'auto', label: `${label}:${attempt}`, cacheKey: source.cacheKey,
+      schema: BASELINE_SCHEMA, schemaName: 'baseline_item', effort: 'high', model, maxOutputTokens: 16384, summary: 'auto', label: `${label}:${attempt}`,
       mock: () => mockBaseline(source),
     });
     const v = validate(BASELINE_SCHEMA, res.json);

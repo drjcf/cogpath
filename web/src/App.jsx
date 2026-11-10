@@ -24,7 +24,7 @@ function Nav({ active }) {
       <a href="#/builds" className={active === 'builds' ? 'on' : ''}>Builds</a>
       <a href="#/items" className={active === 'items' ? 'on' : ''}>Items</a>
       <span className="spacer" />
-      {s.config?.mock ? <span className="tag bad" title="MOCK_META=1: no model calls">mock</span> : null}
+      {s.config?.mock ? <span className="tag bad" title="MOCK_LLM=1: no model calls">mock</span> : null}
       <Identity />
     </nav>
   );

@@ -13,7 +13,7 @@ import { ATTRIBUTIONS, CLAIM_TYPES, SECTIONS, reviewPassage } from '../core/inge
 import { summarize } from '../core/build.js';
 import { parsePath } from '../core/path.js';
 import { newId } from '../core/executor.js';
-import { DEFAULT_MODEL, isMock } from '../core/meta.js';
+import { DEFAULT_MODEL, isMock } from '../core/llm.js';
 import { identify, requireWriter, authMode } from './auth.js';
 import { launchJob, runnerMode } from './jobs.js';
 

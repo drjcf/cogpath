@@ -8,7 +8,7 @@
  *                      tagged failsAt = step k. Confirms each distractor really is "what a learner who failed there picks".
  */
 import { obj, arr, str, enm, num, bool, assertStrict } from './schema.js';
-import { complete, part } from './meta.js';
+import { complete, part } from './llm.js';
 import { getOp, schemaOf } from './ops/index.js';
 import { runSteps, PREAMBLE } from './executor.js';
 
@@ -64,7 +64,7 @@ async function pickWithNotes({ item, notes, model, mockChoice, label }) {
   const res = await complete({
     instructions: 'You are a careful test-taker who is forbidden from using any knowledge outside the NOTES provided. You decide by entailment: an option is determined only if every clause of it is stated or strictly implied by the notes. Cite the note ids you rely on.',
     parts: [part.text(itemText(item)), part.text(notes.text), part.text(`For EACH option, state whether the notes fully entail it and cite the note ids that do. Then choose: the one fully-entailed option, or ${UNDETERMINED} if none or several are fully entailed. Never use outside knowledge; if you find yourself knowing the answer rather than reading it in the notes, that is not entailment.`)],
-    schema, schemaName: 'pick', effort: 'low', model, label, maxOutputTokens: 4096, cacheKey: 'cogpath:verify',
+    schema, schemaName: 'pick', effort: 'low', model, label, maxOutputTokens: 4096,
     mock: () => ({ entailment: item.options.map((o) => {
       const on = o.id === mockChoice;
       const id = [...notes.ids][0];
@@ -144,14 +144,14 @@ export async function verifyCoverTheOptions({ trace, source, model }) {
     // before anything elective. Otherwise the free answer is the generic one and the mapping is a coin toss between the
     // key and the distractor built from the generic plan.
     parts: [...source.parts, part.text(`SCENARIO:\n${item.stem}\n\nQUESTION:\n${item.leadIn}\n\nAnswer the question for this scenario from the source. Every constraint the scenario states is binding: do not propose anything the scenario rules out or makes unavailable, and address any acute problem the scenario presents before anything elective. No options are provided; state your answer.`)],
-    schema: freeSchema, schemaName: 'free_answer', effort: 'medium', model, label: 'verify:cover:free', maxOutputTokens: 4096, cacheKey: source.cacheKey,
+    schema: freeSchema, schemaName: 'free_answer', effort: 'medium', model, label: 'verify:cover:free', maxOutputTokens: 4096,
     mock: () => ({ answer: '[MOCK] ' + item.options.find((o) => o.isKey).text, confidence: 0.8 }),
   });
   const mapSchema = assertStrict(obj({ optionId: enm(item.options.map((o) => o.id)), match: enm(['exact', 'close', 'none'], 'How well the free answer matches the chosen option') }));
   const mapped = await complete({
     instructions: 'You map a free-text answer onto the closest multiple-choice option.',
     parts: [part.text(`FREE ANSWER:\n${free.json.answer}\n\nOPTIONS:\n${item.options.map((o) => `${o.id}. ${o.text}`).join('\n')}\n\nWhich option is closest in meaning to the free answer?`)],
-    schema: mapSchema, schemaName: 'map_answer', effort: 'minimal', model, label: 'verify:cover:map', maxOutputTokens: 2048, cacheKey: 'cogpath:verify',
+    schema: mapSchema, schemaName: 'map_answer', effort: 'low', model, label: 'verify:cover:map', maxOutputTokens: 2048,
     mock: () => ({ optionId: item.key, match: 'close' }),
   });
   return { freeAnswer: free.json.answer, confidence: free.json.confidence, mappedTo: mapped.json.optionId, match: mapped.json.match, key: item.key, pass: mapped.json.optionId === item.key && mapped.json.match !== 'none', usage: [free.usage, mapped.usage] };
@@ -263,7 +263,7 @@ async function corruptArtifact({ trace, source, stepIndex, model }) {
     instructions: PREAMBLE,
     parts: [...source.parts, part.text(`CORRECT ARTIFACT for step "${step.id}" (${op.id}):\n${JSON.stringify(trace.artifacts[step.id], null, 2)}`),
       part.text(`Produce a CORRUPTED version of this artifact that a learner who failed at the ${op.id} step would produce: ${hints[op.id] ?? 'introduce exactly one realistic error of the kind a learner makes at this step'}. Change nothing else. The output must satisfy the same schema.`)],
-    schema, schemaName: `${op.id}_corrupted`, effort: 'low', model, label: `verify:corrupt:${step.id}`, cacheKey: source.cacheKey,
+    schema, schemaName: `${op.id}_corrupted`, effort: 'low', model, label: `verify:corrupt:${step.id}`,
     mock: () => ({ ...trace.artifacts[step.id], _corrupted: undefined }),
   });
   return scrubCorruptedQuotes(trace.artifacts[step.id], res.json);
@@ -271,7 +271,7 @@ async function corruptArtifact({ trace, source, stepIndex, model }) {
 
 /** A source stand-in for re-runs that must not be able to repair a corrupted artifact from the text. */
 function withheldSource(source) {
-  return { ...source, text: '', cacheKey: 'cogpath:verify', parts: [part.text('SOURCE: withheld for this exercise. Work ONLY from the artifacts of earlier steps. Where a field asks for a quotation, copy the most relevant text from those artifacts.')] };
+  return { ...source, text: '', parts: [part.text('SOURCE: withheld for this exercise. Work ONLY from the artifacts of earlier steps. Where a field asks for a quotation, copy the most relevant text from those artifacts.')] };
 }
 
 export async function verifyDistractorMapping({ trace, source, model, onEvent }) {

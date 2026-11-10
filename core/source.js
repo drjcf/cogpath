@@ -1,28 +1,28 @@
 /**
  * Source loading. A source is the content the cognitive path operates on.
- *   .pdf        → uploaded once to the Files API (file_id reused across every call); text also extracted
- *                 locally (pdf-parse) for grounding checks and mock mode. With { inlineText: true } the
- *                 extracted text is sent inline instead of the file (cheaper; no page images).
- *   .md/.txt    → sent inline as input_text.
+ *   .pdf        → sent as a base64 document block (text and page images); text also extracted locally
+ *                 (pdf-parse) for grounding checks and mock mode. With { inlineText: true } the extracted
+ *                 text is sent inline instead of the file (cheaper; no page images).
+ *   .md/.txt    → sent inline as text.
  *   { text }    → inline.
- * Returns { kind, title, path, sha, text, fileId, cacheKey, mode, parts } where `parts` is the stable prefix every
- * request starts with, `sha` keys the ingest store, and `cacheKey` routes all of this source's requests together.
+ * Returns { kind, title, path, sha, text, mode, parts } where `parts` is the stable prefix every request starts
+ * with (its last part ends the cached prefix) and `sha` keys the ingest store.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { PDFParse } from 'pdf-parse';
-import { uploadFile, part } from './meta.js';
+import { part } from './llm.js';
 import { renderDigest } from './ingest.js';
 
 const sha256 = (x) => createHash('sha256').update(x).digest('hex');
-const keyOf = (sha, suffix = '') => `cogpath:${sha.slice(0, 12)}${suffix}`;
+const CACHED = { cache: true };
 
 export async function loadSource(input, { inlineText = false } = {}) {
   if (typeof input === 'object' && input !== null && typeof input.text === 'string') {
     const text = input.text.trim();
     const sha = sha256(text);
-    return { kind: 'text', title: input.title || text.slice(0, 60), path: null, sha, text, pages: [{ num: 1, text }], fileId: null, cacheKey: keyOf(sha), mode: 'raw', parts: [part.text(`SOURCE${input.title ? ` (${input.title})` : ''}:\n${text}`)] };
+    return { kind: 'text', title: input.title || text.slice(0, 60), path: null, sha, text, pages: [{ num: 1, text }], mode: 'raw', parts: [part.text(`SOURCE${input.title ? ` (${input.title})` : ''}:\n${text}`, CACHED)] };
   }
   const filePath = path.resolve(String(input));
   if (!fs.existsSync(filePath)) throw new Error(`Source not found: ${filePath}`);
@@ -32,18 +32,18 @@ export async function loadSource(input, { inlineText = false } = {}) {
 
   if (ext === '.pdf') {
     if (inlineText) {
-      // Locally extracted text sent as input_text: no upload, no page images, plain-text token cost.
+      // Locally extracted text sent as plain text: no page images, plain-text token cost.
       const { text, pages } = await extractPdf(filePath);
       if (!text) throw new Error(`No text layer in ${filePath} (scanned PDF?); --inline-text needs extractable text`);
-      return { kind: 'pdf-text', title, path: filePath, sha, text, pages, fileId: null, cacheKey: keyOf(sha, ':t'), mode: 'raw', parts: [part.text(`SOURCE (${title}):\n${text}`)] };
+      return { kind: 'pdf-text', title, path: filePath, sha, text, pages, mode: 'raw', parts: [part.text(`SOURCE (${title}):\n${text}`, CACHED)] };
     }
-    const [upload, { text, pages }] = await Promise.all([uploadFile(filePath), extractPdf(filePath)]);
-    return { kind: 'pdf', title, path: filePath, sha, text, pages, fileId: upload.id, fileCached: upload.cached, cacheKey: keyOf(sha), mode: 'raw', parts: [part.file(upload.id)] };
+    const { text, pages } = await extractPdf(filePath);
+    return { kind: 'pdf', title, path: filePath, sha, text, pages, mode: 'raw', parts: [part.pdfBase64(fs.readFileSync(filePath), `${title}.pdf`, CACHED)] };
   }
   if (['.md', '.markdown', '.txt', '.text'].includes(ext)) {
     const text = fs.readFileSync(filePath, 'utf8').trim();
     const heading = text.match(/^#\s+(.+)$/m)?.[1]?.trim();
-    return { kind: 'text', title: heading || title, path: filePath, sha, text, pages: [{ num: 1, text }], fileId: null, cacheKey: keyOf(sha), mode: 'raw', parts: [part.text(`SOURCE (${heading || title}):\n${text}`)] };
+    return { kind: 'text', title: heading || title, path: filePath, sha, text, pages: [{ num: 1, text }], mode: 'raw', parts: [part.text(`SOURCE (${heading || title}):\n${text}`, CACHED)] };
   }
   throw new Error(`Unsupported source type '${ext}'. Use .pdf, .md, or .txt`);
 }
@@ -55,7 +55,7 @@ export async function loadSource(input, { inlineText = false } = {}) {
 export function sourceFromStore(ing) {
   const text = ing.text ?? '';
   const title = ing.meta.title || ing.digest.title || shortTitle(ing.meta.sha);
-  return { kind: ing.meta.kind === 'pdf' ? 'pdf-text' : (ing.meta.kind ?? 'text'), title, path: ing.meta.path ?? null, sha: ing.meta.sha, text, pages: ing.pages ?? [{ num: 1, text }], fileId: null, cacheKey: keyOf(ing.meta.sha, ':t'), mode: 'raw', fromStore: true, parts: [part.text(`SOURCE (${title}):\n${text}`)] };
+  return { kind: ing.meta.kind === 'pdf' ? 'pdf-text' : (ing.meta.kind ?? 'text'), title, path: ing.meta.path ?? null, sha: ing.meta.sha, text, pages: ing.pages ?? [{ num: 1, text }], mode: 'raw', fromStore: true, parts: [part.text(`SOURCE (${title}):\n${text}`, CACHED)] };
 }
 const shortTitle = (sha) => `source ${String(sha).slice(0, 12)}`;
 
@@ -78,9 +78,10 @@ export function withFocus(source, plan, { usedConstraints = [] } = {}) {
  */
 export function withDigest(source, digest, mode = 'digest') {
   if (mode === 'raw' || !digest) return { ...source, mode: 'raw', digest: null };
-  const dpart = part.text(renderDigest(digest));
-  if (mode === 'both') return { ...source, mode, digest, parts: [...source.parts, dpart] };
-  if (mode === 'digest') return { ...source, mode, digest, cacheKey: keyOf(source.sha, ':d'), parts: [dpart] };
+  const dpart = part.text(renderDigest(digest), CACHED);
+  // only the last part of the prefix carries the breakpoint
+  if (mode === 'both') return { ...source, mode, digest, parts: [...source.parts.map(({ cache, ...p }) => p), dpart] };
+  if (mode === 'digest') return { ...source, mode, digest, parts: [dpart] };
   throw new Error(`unknown source mode '${mode}' (raw | digest | both)`);
 }
 

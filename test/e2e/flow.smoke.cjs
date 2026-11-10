@@ -1,5 +1,5 @@
 // End-to-end console smoke in local mode: upload → ingest job → review (certify all, approve) → launch build → live
-// progress → record. Needs a server started with MOCK_META=1 COGPATH_AUTH=none COGPATH_JOB_RUNNER=local on an empty
+// progress → record. Needs a server started with MOCK_LLM=1 COGPATH_AUTH=none COGPATH_JOB_RUNNER=local on an empty
 // COGPATH_DATA, and Playwright (npx playwright install chromium). Run: PORT=3077 node test/e2e/flow.smoke.cjs
 const path = require('node:path');
 const { chromium } = require('playwright');

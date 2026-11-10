@@ -117,10 +117,6 @@ export async function readBuildEvents(id, { after = '', limit = 500 } = {}) {
   return (after ? all.filter((e) => e.seq > after) : all).slice(0, limit);
 }
 
-// ── Files API cache ──
-export const readFileCache = async () => (await docData(fsdb().doc('meta/files')))?.cache ?? {};
-export const writeFileCache = async (cache) => { await fsdb().doc('meta/files').set({ cache }); };
-
 // ── jobs ──
 const jobRef = (id) => fsdb().doc(`jobs/${id}`);
 export const writeJob = async (job) => { await jobRef(job.id).set(job); };

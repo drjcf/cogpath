@@ -18,7 +18,7 @@ async function until(fn, { timeout = 60000, every = 300 } = {}) {
 
 test('api: upload, ingest job, review, approve, build job, record and events', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cogpath-api-'));
-  Object.assign(process.env, { MOCK_META: '1', COGPATH_DATA: dir, COGPATH_STORE: 'fs', COGPATH_AUTH: 'none', COGPATH_JOB_RUNNER: 'local', COGPATH_JOB_QUIET: '1' });
+  Object.assign(process.env, { MOCK_LLM: '1', COGPATH_DATA: dir, COGPATH_STORE: 'fs', COGPATH_AUTH: 'none', COGPATH_JOB_RUNNER: 'local', COGPATH_JOB_QUIET: '1' });
   const { apiRouter } = await import('../server/api.js');
   const app = express();
   app.use('/api', apiRouter());

@@ -13,7 +13,7 @@ import { getJob, updateJob, readOriginal, patchSourceMeta, loadIngest, updateBui
 import { loadSource, sourceFromStore, withDigest } from '../core/source.js';
 import { ingestFlow, buildFlow } from '../core/flows.js';
 import { parsePath } from '../core/path.js';
-import { DEFAULT_MODEL } from '../core/meta.js';
+import { DEFAULT_MODEL } from '../core/llm.js';
 
 const log = (...m) => console.log(`[worker ${new Date().toISOString()}]`, ...m);
 

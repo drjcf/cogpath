@@ -22,7 +22,7 @@ test('gcp store: sources, decisions, approval, builds, jobs, allowlist on the Fi
   process.env.COGPATH_BLOBS = 'fs';
   process.env.COGPATH_DATA = dir;
   process.env.COGPATH_ALLOWLIST = 'env-admin@example.com';
-  process.env.MOCK_META = '1';
+  process.env.MOCK_LLM = '1';
   const store = await import('../core/store.js');
   store.configureStore('gcp');
   const gcp = await import('../core/store-gcp.js');
@@ -102,8 +102,4 @@ test('gcp store: sources, decisions, approval, builds, jobs, allowlist on the Fi
   assert.equal(await store.allowlistEntry('nobody@example.com'), null);
   await store.allowEmail('Reviewer@Example.com', { role: 'reviewer' });
   assert.equal((await store.allowlistEntry('reviewer@example.com')).role, 'reviewer');
-
-  // the Files API id cache lives in the store too
-  await store.writeFileCache({ abc: { id: 'file-1' } });
-  assert.equal((await store.readFileCache()).abc.id, 'file-1');
 });

@@ -8,7 +8,7 @@
  * (and the model is asked once to repair them), so nothing enters the digest that cannot be located in the source.
  */
 import { obj, arr, str, enm, bool, assertStrict, validate } from './schema.js';
-import { complete, part } from './meta.js';
+import { complete, part } from './llm.js';
 import { spanFound, norm, locateInText } from './textmatch.js';
 import { PREAMBLE } from './executor.js';
 
@@ -115,7 +115,7 @@ export async function recommendationsPass(source, digest, { model, label = 'inge
   const res = await complete({
     instructions: PREAMBLE,
     parts: [...source.parts, part.text(`List EVERY prescriptive statement this source makes (recommendations, technique rules, "should", "must", "avoid", "never", "consider"), one claim each, in reading order. Quote each verbatim in span (at most 40 words, no paraphrase). Do not include findings, mechanisms, or background. If the source makes no recommendations, return an empty list.`)],
-    schema: RECS_SCHEMA, schemaName: 'recommendations', effort: 'low', model, maxOutputTokens: 8192, label, cacheKey: source.cacheKey,
+    schema: RECS_SCHEMA, schemaName: 'recommendations', effort: 'low', model, maxOutputTokens: 8192, label,
     mock: () => ({ claims: [] }),
   });
   const v = validate(RECS_SCHEMA, res.json);
@@ -194,7 +194,7 @@ export async function ingestSource(source, { model, maxClaims, effort = 'medium'
     const res = await complete({
       instructions: PREAMBLE,
       parts: [...source.parts, part.text(instruction + feedback)],
-      schema: DIGEST_SCHEMA, schemaName: 'digest', effort, model, maxOutputTokens: 32768, summary: 'auto', label: `${label}:${attempt}`, cacheKey: source.cacheKey,
+      schema: DIGEST_SCHEMA, schemaName: 'digest', effort, model, maxOutputTokens: 32768, summary: 'auto', label: `${label}:${attempt}`,
       mock: () => mockDigest(source, maxClaims),
     });
     const v = validate(DIGEST_SCHEMA, res.json);

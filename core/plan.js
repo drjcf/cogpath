@@ -5,7 +5,7 @@
  * and the build reports a coverage map (which claims each item rests on, and which went unused).
  */
 import { obj, arr, str, assertStrict, validate } from './schema.js';
-import { complete, part } from './meta.js';
+import { complete, part } from './llm.js';
 import { PREAMBLE } from './executor.js';
 import { parsePath, formatPath, PathError } from './path.js';
 import { describeOps, OPS } from './ops/index.js';
@@ -132,7 +132,7 @@ export async function planItems({ source, n, paths, pathHint, model, label = 'pl
   for (let attempt = 1; attempt <= 2; attempt++) {
     const res = await complete({
       instructions: PREAMBLE, parts: [...source.parts, part.text(instruction + feedback)],
-      schema: PLAN_SCHEMA, schemaName: 'item_plans', effort: 'medium', model, maxOutputTokens: 16384, summary: 'auto', label: `${label}:${attempt}`, cacheKey: source.cacheKey,
+      schema: PLAN_SCHEMA, schemaName: 'item_plans', effort: 'medium', model, maxOutputTokens: 16384, summary: 'auto', label: `${label}:${attempt}`,
       mock: () => mockPlans({ n, claims, pathHint: paths?.[0] }),
     });
     const v = validate(PLAN_SCHEMA, res.json);

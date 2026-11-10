@@ -81,10 +81,6 @@ export async function readBuildEvents(id, { after = '', limit = 500 } = {}) {
   return (after ? all.filter((e) => e.seq > after) : all).slice(0, limit);
 }
 
-// ── Files API cache ──
-export const readFileCache = async () => readJson(path.join(DATA_DIR(), '.files.json'), {});
-export const writeFileCache = async (c) => writeJson(path.join(DATA_DIR(), '.files.json'), c);
-
 // ── jobs ──
 export const writeJob = async (job) => writeJson(path.join(jobsDir(), `${job.id}.json`), job);
 export const readJob = async (id) => readJson(path.join(jobsDir(), `${id}.json`));

@@ -3,7 +3,7 @@
  * so an op may import this without a cycle.
  */
 import { obj, arr, str, bool, assertStrict } from './schema.js';
-import { complete, part } from './meta.js';
+import { complete, part } from './llm.js';
 import { spanFound, clauseSupported, NOTE_SUPPORT_FRACTION } from './textmatch.js';
 
 export function notesFromClaims(claims, heading) {
@@ -25,7 +25,7 @@ export async function entailedByNotes({ statement, notes, model, label, mockEnta
   const res = await complete({
     instructions: 'You decide entailment strictly and use no knowledge outside the NOTES. A statement is fully entailed only if every clause of it is stated or strictly implied by the notes; cite the note ids and quote them verbatim.',
     parts: [part.text(`STATEMENT:\n${statement}`), part.text(notes.text), part.text('Is the STATEMENT fully entailed by the NOTES? Quote the note text that establishes each clause.')],
-    schema, schemaName: 'entailment', effort: 'low', model, label, maxOutputTokens: 4096, cacheKey: 'cogpath:verify',
+    schema, schemaName: 'entailment', effort: 'low', model, label, maxOutputTokens: 4096,
     mock: () => ({ fullyEntailed: mockEntailed, evidence: [], missingClause: mockEntailed ? '' : '[MOCK] clause' }),
   });
   const j = res.json;

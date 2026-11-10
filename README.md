@@ -2,7 +2,7 @@
 
 Compile assessment items from a **cognitive path**. Instead of asking a model to "write a hard question", cogpath makes the model *execute* the reasoning a learner must perform (recall > analyze > evaluate > synthesize) over a source, one typed artifact per step, then assembles a single-best-answer item whose key is the terminal artifact and whose distractors are **failures at specific steps**. It then verifies that the full path is actually necessary to reach the key.
 
-Built on the Meta Model API (Muse Spark 1.3): structured output with constrained decoding, per-step reasoning effort, native PDF input, automatic prefix caching. Live at https://cogpath.org (also https://edai-prep-25580.web.app); the write-up is `docs/SUBMISSION.md`.
+Built on the Claude API (default model `claude-sonnet-5-5`): structured outputs with constrained decoding, per-step effort, native PDF input, prompt caching. It started on the Meta Model API (Muse Spark 1.3) for the Meta hackathon; the write-up from then is `docs/SUBMISSION.md`. Live at https://cogpath.org (also https://edai-prep-25580.web.app).
 
 ## Built during the hackathon
 
@@ -17,13 +17,13 @@ cp .env.example .env            # add MODEL_API_KEY
 node cli.js ops                 # list cognitive operations and their params
 node cli.js run samples/retrobulbar-hematoma.md "recall(3) > analyze(causal) > evaluate(efficacy, safety) > synthesize(management plan)"
 node cli.js run article.pdf "recall > analyze(contrast) > evaluate(benefit, risk, cost) > synthesize(recommendation)" --deep
-node cli.js run article.pdf "…" --deep --inline-text   # send the extracted text instead of the uploaded file (no page images, ~4x cheaper input)
-node cli.js probe-cache article.pdf [--inline-text]     # three cheap calls that show whether prefix caching engages for this source type
+node cli.js run article.pdf "…" --deep --inline-text   # send the extracted text instead of the PDF (no page images, fewer input tokens)
+node cli.js probe-cache article.pdf [--inline-text]     # five cheap calls that show whether prompt caching engages, and whether a new schema breaks it
 ```
 
-A PDF is uploaded once to the Files API (the `file_id` is reused across every call and cached by content hash in `runs/.files.json`; delete that file to force a re-upload) and its text is also extracted locally for grounding checks. File input is tokenized with page images, so a 6,500-word article costs about 38k input tokens per call; `--inline-text` sends the extracted text only.
+A PDF is sent as a base64 `document` block (limits: 128 MB and 100 pages in a request under a 1M-token context) and its text is also extracted locally for grounding checks. Each page is read as an image as well as text, so a PDF costs more input tokens than its text; `--inline-text` sends the extracted text only.
 
-No key yet: `MOCK_META=1 node cli.js run …` runs the whole pipeline and verifier on deterministic placeholder artifacts (marked `[MOCK]`).
+No key yet: `MOCK_LLM=1 node cli.js run …` runs the whole pipeline and verifier on deterministic placeholder artifacts (marked `[MOCK]`).
 
 Tests: `npm test`.
 
@@ -157,13 +157,13 @@ Costs are the model calls; Cloud Run scales to zero, the job runs only while a t
 
 ## How a call is laid out (prompt caching)
 
-Every request shares the same prefix: framework preamble (`instructions`) then the source (`input_file` by file id, inline text, or the digest), then earlier artifacts, then the step instruction last. Every request carries a `prompt_cache_key` (one per source, so its calls route to the backend holding the prefix) and `prompt_cache_retention: 24h`; without the key the API reported 0 cached tokens on identical back-to-back requests. `probe-cache` measures what actually engages.
+Every request shares the same prefix: framework preamble (`system`), then the source (a PDF `document` block, inline text, or the digest), then earlier artifacts, then the step instruction last. The last source part carries a `cache_control` breakpoint (5 minute TTL, refreshed on each hit; `LLM_CACHE_TTL=1h` for a 1 hour TTL, `none` to turn it off). A hit needs an identical prefix: the cache is built tools, system, then messages, and a prompt under the model's minimum (512 tokens on Sonnet 5.5) is not cached and raises no error. Per the docs a changed `output_config.format` or effort can invalidate the prefix, which would stop one source's cache being shared across steps with different schemas; same-schema calls (the verifier's picks, the corruption re-runs) still share it. `probe-cache` measures what actually engages: `cached` is `cache_read_input_tokens`, `written` is `cache_creation_input_tokens`.
 
-PDFs are uploaded once (`purpose: user_data`) and the file id is reused for identical bytes (`runs/.files.json`). Text is also extracted locally (pdf-parse) for the grounding check.
+Text is also extracted locally (pdf-parse) for the grounding check.
 
 ## Adding a cognitive operation
 
-Create `core/ops/<id>.js` exporting `{ id, label, bloom, description, requires, params, effort, schema | schemaFor(ctx), instruction(ctx), verify(artifact, ctx), mock(ctx) }` and register it in `core/ops/index.js`. Schemas are written with `core/schema.js` helpers so they satisfy Meta strict mode (`assertStrict` throws otherwise). `verify()` returns a list of problems; the executor feeds them back to the model for one retry.
+Create `core/ops/<id>.js` exporting `{ id, label, bloom, description, requires, params, effort, schema | schemaFor(ctx), instruction(ctx), verify(artifact, ctx), mock(ctx) }` and register it in `core/ops/index.js`. Schemas are written with `core/schema.js` helpers so they satisfy Claude structured outputs (`assertStrict` throws otherwise). Value constraints the API rejects (`minimum`, `maximum`, `maxLength`, `maxItems`, `minItems` above 1) may be written in the schema: they are stripped from the request and stated in the field description, and the executor still enforces them locally. `verify()` returns a list of problems; the executor feeds them back to the model for one retry.
 
 Candidates: `apply(scenario)`, `critique`, `predict`, `compare(sourceB)`.
 
@@ -180,8 +180,8 @@ Candidates: `apply(scenario)`, `critique`, `predict`, `compare(sourceB)`.
 ```
 core/ops/         recall, analyze, evaluate, synthesize, assemble (+ registry)
 core/path.js      DSL parser / normalizer
-core/schema.js    strict-schema helpers + validator
-core/meta.js      Meta Model API client (Responses protocol, files, mock)
+core/schema.js    strict-schema helpers, validator, Claude request form (toClaudeSchema)
+core/llm.js       Claude API client (Messages API, structured outputs, PDF, caching, mock)
 core/source.js    pdf / md / txt / inline loading; withDigest() re-bases a source on its digest
 core/ingest.js    one-call extraction of a source into a verbatim-grounded digest of claims
 core/store.js     runs/sources/<sha12>/ (source.json, text.txt, digest.json)
