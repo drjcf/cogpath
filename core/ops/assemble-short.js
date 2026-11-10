@@ -155,13 +155,15 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
     const unmet = grade.marks.filter((m) => !m.met).map((m) => item.rubric.find((e) => e.id === m.elementId));
     for (const e of unmet) problems.push(`the model answer does not earn its own element for "${e.nodeId}" (${e.id}): "${e.requirement}". State that point in the model answer (within ${MAX_ANSWER_WORDS} words), or rewrite the requirement as one point the answer already shows`);
     const uncued = cue.cues.filter((c) => !c.cued);
+    // The cue and one-point verdicts are a judge's opinion and vary between runs: advice for one revision, never a failed assembly.
+    const advice = [];
     const compound = cue.cues.filter((c) => c.cued && !c.onePoint);
-    for (const c of compound) problems.push(`element "${c.nodeId}" (${c.elementId}) joins several points (${c.reason}); an answer giving only one would be marked not met. Keep the ONE point this node adds, in a single clause`);
-    for (const c of uncued) problems.push(`the lead-in does not ask for element "${c.nodeId}" (${c.elementId}): "${item.rubric.find((e) => e.id === c.elementId).requirement}" (${c.reason}). Reword the lead-in (still ONE question, naming no fact, mechanism, or option) so that an answer showing this point is a direct answer to it`);
+    for (const c of compound) advice.push(`element "${c.nodeId}" (${c.elementId}) joins several points (${c.reason}); an answer giving only one would be marked not met. Keep the ONE point this node adds, in a single clause`);
+    for (const c of uncued) advice.push(`the lead-in does not ask for element "${c.nodeId}" (${c.elementId}): "${item.rubric.find((e) => e.id === c.elementId).requirement}" (${c.reason}). Reword the lead-in (still ONE question, naming no fact, mechanism, or option) so that an answer showing this point is a direct answer to it`);
     return {
       skipped: false, entailed: ent?.entailed ?? null, citedNotes: ent?.citedNotes ?? [], missingClause: ent?.missingClause ?? null,
       answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id), uncued: uncued.map((c) => c.elementId), compound: compound.map((c) => c.elementId),
-      usage: [ent?.usage, grade.usage, cue.usage].filter(Boolean), problems,
+      usage: [ent?.usage, grade.usage, cue.usage].filter(Boolean), problems, advice,
     };
   },
 

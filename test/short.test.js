@@ -282,10 +282,10 @@ test('verifyAsync grades the model answer against its own rubric and checks the 
     assert.equal(r.answerScore, 2); assert.equal(r.answerMax, 4);
     assert.deepEqual(r.unmet, ['e2', 'e4']);
     assert.deepEqual(r.uncued, ['e1']);
-    assert.equal(r.problems.length, 3);
+    assert.equal(r.problems.length, 2); assert.equal(r.advice.length, 1);
     assert.match(r.problems[0], /does not earn its own element for "analyze" \(e2\)/);
     assert.match(r.problems[1], /\(e4\)/);
-    assert.match(r.problems[2], new RegExp(`the lead-in does not ask for element "${path[0].id}" \\(e1\\).*the question asks only what to do.*ONE question`));
+    assert.match(r.advice[0], new RegExp(`the lead-in does not ask for element "${path[0].id}" \\(e1\\).*the question asks only what to do.*ONE question`));
     assert.equal(r.usage.length, 2);
   });
 });
@@ -364,9 +364,9 @@ test('an element that joins several points is sent back, and a lead-in that grow
     const r = await ASSEMBLE_SHORT.verifyAsync(art, ctx, { model: 'claude-sonnet-5-5' });
     assert.deepEqual(r.compound, ['e3'], 'an uncued element is reported once, as uncued');
     assert.deepEqual(r.uncued, ['e4']);
-    assert.equal(r.problems.length, 2);
-    assert.match(r.problems[0], /element "evaluate" \(e3\) joins several points \(a choice, plus two reasons\).*ONE point this node adds/);
-    assert.match(r.problems[1], /does not ask for element "synthesize" \(e4\)|does not ask for element "[a-z]+" \(e4\)/);
+    assert.equal(r.problems.length, 0); assert.equal(r.advice.length, 2);
+    assert.match(r.advice[0], /element "evaluate" \(e3\) joins several points \(a choice, plus two reasons\).*ONE point this node adds/);
+    assert.match(r.advice[1], /does not ask for element "synthesize" \(e4\)/);
   });
   const long = 'What is happening to this patient, what do the findings and the elapsed time tell you about how fast you must act, what would you do right now, and why that rather than the alternatives and the other options you would also consider before deciding?';
   assert.ok(long.split(' ').length > MAX_LEADIN_WORDS);
@@ -438,4 +438,24 @@ test('a digest too small for the requested item count is refused before any call
   const { planItems } = await import('../core/plan.js');
   const claims = [...Array.from({ length: 7 }, (_, i) => ({ id: `cl${i + 1}`, type: 'result', text: 'x' })), ...Array.from({ length: 15 }, (_, i) => ({ id: `cl${i + 8}`, type: 'recommendation', text: 'y' }))];
   await assert.rejects(planItems({ source: { digest: { claims }, parts: [] }, n: 5, model: 'mock' }), /7 premise claims .* at most 2 items, not 5/);
+});
+
+test('judge advice earns one revision and never fails the assembly, however often the judge repeats it', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const art = ASSEMBLE_SHORT.mock(makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts }));
+  const seen = [];
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => {
+      const item = finishShort(art);
+      if (isGrade(body)) return msg(allMet(item, art.modelAnswer));
+      if (isCue(body)) { const c = allCued(item); c.elements[0] = { elementId: 'e1', cued: false, onePoint: true, reason: 'not asked' }; return msg(c); } // the judge never relents
+      seen.push(body.messages[0].content.at(-1).text); return msg(art);
+    } }) } });
+    const rec = await executeOp({ op: ASSEMBLE_SHORT, source, path, step: { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path.at(-1).id] }, artifacts: trace.artifacts, model: 'claude-sonnet-5-5' });
+    assert.equal(rec.attempts.length, 2, 'one revision for the advice, then stop');
+    assert.deepEqual(rec.problems, []);
+    assert.equal(rec.attempts[1].advice.length, 1);
+    assert.match(seen[1], /the lead-in does not ask for element "recall" \(e1\)/);
+    assert.equal(assemblyOf({ assemble: rec }), null);
+  });
 });

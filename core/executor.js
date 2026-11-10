@@ -45,6 +45,7 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
 
   let feedback = '';
   const earlier = []; // reasons earlier attempts were rejected for
+  let advised = false; // advice has been given its one revision
   let best = null;     // the attempt with the fewest problems (the latest on a tie): a later attempt can regress
   const maxAttempts = op.maxAttempts ?? 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -64,7 +65,9 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
       asyncCheck = await op.verifyAsync(res.json, ctx, { model, mock: res.mock });
       problems.push(...(asyncCheck?.problems ?? []));
     }
-    rec.attempts.push({ attempt, problems, usage: res.usage, ms: res.ms, asyncCheck });
+    // Advice comes from a judge whose verdicts vary run to run: it earns ONE revision, and never fails the step.
+    const advice = asyncCheck?.advice ?? [];
+    rec.attempts.push({ attempt, problems, advice, usage: res.usage, ms: res.ms, asyncCheck });
     rec.artifact = res.json;
     rec.usage = res.usage;
     rec.rawUsage = res.rawUsage ?? null;
@@ -72,15 +75,18 @@ export async function executeOp({ op, source, path, step, artifacts, model, effo
     rec.reasoningSummary = res.reasoningSummary;
     rec.mock = res.mock;
     rec.problems = problems;
-    if (!best || problems.length <= best.problems.length) best = { artifact: res.json, problems, usage: res.usage, rawUsage: res.rawUsage ?? null, reasoningSummary: res.reasoningSummary, mock: res.mock };
-    if (problems.length === 0 || res.mock || attempt === maxAttempts) break;
+    if (!best || problems.length < best.problems.length || (problems.length === best.problems.length && advice.length <= best.advice.length)) best = { artifact: res.json, problems, advice, usage: res.usage, rawUsage: res.rawUsage ?? null, reasoningSummary: res.reasoningSummary, mock: res.mock };
+    const reviseForAdvice = advice.length > 0 && !advised;
+    if ((problems.length === 0 && !reviseForAdvice) || res.mock || attempt === maxAttempts) break;
+    if (advice.length) advised = true;
+    const reasons = [...problems, ...(reviseForAdvice ? advice : [])];
     // The retry is a fresh call, so it is shown its previous output (to correct, not to regenerate) and every reason given so far.
-    const stillBinding = [...new Set(earlier)].filter((p) => !problems.includes(p));
-    feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${problems.join('\n- ')}`
+    const stillBinding = [...new Set(earlier)].filter((p) => !reasons.includes(p));
+    feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${reasons.join('\n- ')}`
       + (stillBinding.length ? `\n\nEARLIER ATTEMPTS WERE ALSO REJECTED FOR THESE REASONS; DO NOT REINTRODUCE THEM:\n- ${stillBinding.join('\n- ')}` : '')
       + `\n\nYOUR PREVIOUS ATTEMPT, to be corrected (change only what the reasons require and keep everything else):\n${JSON.stringify(res.json)}`;
-    earlier.push(...problems);
-    onEvent?.({ type: 'step:retry', step: rec.id, problems });
+    earlier.push(...problems); // advice is not carried forward: it is given once
+    onEvent?.({ type: 'step:retry', step: rec.id, problems: reasons });
   }
   if (best && rec.artifact !== best.artifact) Object.assign(rec, { artifact: best.artifact, problems: best.problems, usage: best.usage, rawUsage: best.rawUsage, reasoningSummary: best.reasoningSummary, mock: best.mock });
   onEvent?.({ type: 'step:done', step: rec.id, op: op.id, problems: rec.problems, usage: rec.usage, ms: rec.ms });
