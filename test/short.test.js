@@ -12,7 +12,7 @@ import { loadSource } from '../core/source.js';
 import { runPath, makeCtx, executeOp, sumUsage, MAX_MCQ_STEPS } from '../core/executor.js';
 import { _setClientForTests } from '../core/llm.js';
 import { verifyItem } from '../core/verifier.js';
-import { buildShortSchema, finishShort, shortShapeProblems, allowedSources, MAX_REQUIREMENT_WORDS } from '../core/ops/assemble-short.js';
+import { buildShortSchema, finishShort, shortShapeProblems, allowedSources, MAX_REQUIREMENT_WORDS, MAX_LEADIN_WORDS } from '../core/ops/assemble-short.js';
 import { judgeGrade, judgeElements, shortNecessitySummary, gradeSchema, elementPickSchema, cueSchema, checkCues, gradeAnswer, pickElements, verifyShortNecessity } from '../core/verify-short.js';
 import { notesFor } from '../core/verifier.js';
 
@@ -236,7 +236,7 @@ const withReal = async (fn) => { const saved = process.env.MOCK_LLM; process.env
 const msg = (json) => ({ id: 'm', model: 'claude-sonnet-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(json) }], usage: { input_tokens: 10, output_tokens: 10 } });
 const isGrade = (body) => Boolean(body.output_config?.format?.schema?.properties?.marks);
 const isCue = (body) => Boolean(body.output_config?.format?.schema?.properties?.elements);
-const allCued = (item) => ({ elements: item.rubric.map((e) => ({ elementId: e.id, cued: true, reason: 'asked for' })) });
+const allCued = (item) => ({ elements: item.rubric.map((e) => ({ elementId: e.id, cued: true, onePoint: true, reason: 'asked for' })) });
 const allMet = (item, answer) => ({ marks: item.rubric.map((e) => ({ elementId: e.id, met: true, evidence: answer.split(/\s+/).slice(1, 5).join(' ') })) });
 
 test('an element is one point: a requirement past the length limit is sent back, a short one passes', async () => {
@@ -341,4 +341,33 @@ test('the lead-in is asked to cue every element: instruction, schema, and a cue 
   assert.deepEqual(r.uncued, []); assert.equal(r.cues.length, path.length);
   // a verdict naming an unknown element id cannot slip in: the schema's enum rejects it
   assert.equal(validate(cueSchema(finishShort(ASSEMBLE_SHORT.mock(ctx))), { elements: [{ elementId: 'e9', cued: false, reason: 'x' }] }).ok, false);
+});
+
+test('an element that joins several points is sent back, and a lead-in that grows into a checklist is rejected', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const art = ASSEMBLE_SHORT.mock(ctx);
+  await withReal(async () => {
+    _setClientForTests({ messages: { stream: (body) => ({ finalMessage: async () => {
+      const item = finishShort(art);
+      if (isGrade(body)) return msg(allMet(item, art.modelAnswer));
+      assert.ok(isCue(body));
+      const c = allCued(item);
+      c.elements[2] = { elementId: 'e3', cued: true, onePoint: false, reason: 'a choice, plus two reasons' };
+      c.elements[3] = { elementId: 'e4', cued: false, onePoint: false, reason: 'not asked' };
+      return msg(c);
+    } }) } });
+    const r = await ASSEMBLE_SHORT.verifyAsync(art, ctx, { model: 'claude-sonnet-5-5' });
+    assert.deepEqual(r.compound, ['e3'], 'an uncued element is reported once, as uncued');
+    assert.deepEqual(r.uncued, ['e4']);
+    assert.equal(r.problems.length, 2);
+    assert.match(r.problems[0], /element "evaluate" \(e3\) joins several points \(a choice, plus two reasons\).*ONE point this node adds/);
+    assert.match(r.problems[1], /does not ask for element "synthesize" \(e4\)|does not ask for element "[a-z]+" \(e4\)/);
+  });
+  const long = 'What is happening to this patient, what do the findings and the elapsed time tell you about how fast you must act, what would you do right now, and why that rather than the alternatives and the other options you would also consider before deciding?';
+  assert.ok(long.split(' ').length > MAX_LEADIN_WORDS);
+  assert.ok(ASSEMBLE_SHORT.verify({ ...art, leadIn: long }, ctx).some((p) => new RegExp(`the lead-in is ${long.split(' ').length} words; write at most ${MAX_LEADIN_WORDS}`).test(p)));
+  assert.deepEqual(ASSEMBLE_SHORT.verify(art, ctx), []);
+  assert.match(ASSEMBLE_SHORT.instruction(ctx), /Each part of the lead-in is generic/);
+  assert.match(ASSEMBLE_SHORT.instruction(ctx), new RegExp(`at most ${MAX_LEADIN_WORDS} words`));
 });

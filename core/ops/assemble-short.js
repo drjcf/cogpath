@@ -19,6 +19,8 @@ export const MAX_ANSWER_WORDS = 110;
 export const MIN_ANSWER_WORDS = 15;
 /** A rubric element is one point. The prompt asks for at most MAX_REQUIREMENT_WORDS; the check allows a little slack so a clause does not cost a retry. */
 export const MAX_REQUIREMENT_WORDS = 25;
+/** A lead-in that grows a clause per rubric element becomes a checklist; it stays a question. */
+export const MAX_LEADIN_WORDS = 40;
 const REQUIREMENT_SLACK = 5;
 
 const words = (t) => String(t ?? '').trim().split(/\s+/).filter(Boolean).length;
@@ -92,7 +94,7 @@ Construct:
    It MUST embed the case constraint from step "${synStep.id}" as a concrete feature of this case: "${cc.feature}" (${cc.whyGenericInsufficient}). Rewrite the feature in the vignette's own voice as findings, history, or the patient's words (never paste it as a sentence about "a patient", never label it, never hint at its consequence), then copy the stem sentence that carries it into constraintSpan.` : `
    constraintSpan is "" (the path has no case constraint).`}
    The stem states NONE of the recalled facts, figures, rates, incidences, study results, mechanisms, judgments, or plans; the learner must bring them.
-2. A lead-in that is ONE question (one question mark, which may have several parts) worded so that every rubric element is something the question asks for. An expert who answers it fully, from the source and without seeing the rubric, must have reason to say each element; "What would you do, and why?" alone cues only the decision, not the mechanism or the comparison. Cue each kind of element by what it needs: a fact node by asking what is going on or why it matters, a relation node by asking what the findings show, an evaluate node by asking why this choice rather than the alternatives, the terminal node by asking what to do. For example: "What is happening to this patient, what would you do right now, and why that rather than the alternatives?" The lead-in names no fact, mechanism, or option. No options are given.
+2. A lead-in that is ONE question (one question mark, which may have several parts) worded so that every rubric element is something the question asks for. An expert who answers it fully, from the source and without seeing the rubric, must have reason to say each element; "What would you do, and why?" alone cues only the decision, not the mechanism or the comparison. Cue each kind of element by what it needs: a fact node by asking what is going on or why it matters, a relation node by asking what the findings show, an evaluate node by asking why this choice rather than the alternatives, the terminal node by asking what to do. For example: "What is happening to this patient, what would you do right now, and why that rather than the alternatives?" Each part of the lead-in is generic, a question that could be asked of any case in this field ("what is happening", "how urgent is it", "what would you do", "why that rather than the alternatives"); it never points at a feature, a finding, or the time course of this case, and it is at most ${MAX_LEADIN_WORDS} words. The lead-in names no fact, mechanism, or option. No options are given.
 3. A model answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words: the "${terminal.op}" artifact of step "${terminal.id}" written as the answer a strong clinician would give, with its reasoning. It must carry what the synthesized plan adds for this case; an answer that only repeats what the source recommends is not the model answer.
 4. A rubric with EXACTLY ONE element per path node, in path order (${ctx.path.map((s) => s.id).join(', ')}). An element is what an answer must show to earn credit at that node:
    - recall node → the fact(s) the answer must bring (derivedFrom = one of that node's concept ids);
@@ -119,6 +121,7 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
       if (words(e.commonError) < 3) problems.push(`element for "${e.nodeId}" has no usable commonError`);
       if (spanFound(e.requirement, artifact.stem).found) problems.push(`element for "${e.nodeId}" restates the stem; it must name what the learner brings`);
     }
+    if (words(artifact.leadIn) > MAX_LEADIN_WORDS) problems.push(`the lead-in is ${words(artifact.leadIn)} words; write at most ${MAX_LEADIN_WORDS}, as generic parts that do not point at a feature, finding, or time course of this case`);
     const reqs = artifact.rubric.map((e) => e.requirement.toLowerCase().trim());
     if (new Set(reqs).size !== reqs.length) problems.push('two rubric elements have the same requirement');
     problems.push(...stemProblems(artifact, ctx));
@@ -130,9 +133,9 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
    * Model-backed checks on the assembled item, run together:
    *  1. the model answer, as written, is not entailed by the source's claims (the synthesis may carry an adaptation that the answer drops);
    *  2. the model answer earns every element of its own rubric (the in-loop counterpart of the modelAnswerScore verification);
-   *  3. the lead-in, as worded, asks for what every element requires (the in-loop counterpart of the answerability verification:
+   *  3. every element is one point, and the lead-in, as worded, asks for what it requires (the in-loop counterpart of the answerability verification:
    *     an element no answer to the question is expected to say can never be earned by an expert who has not seen the rubric).
-   * An element the answer does not show, or the question does not ask for, is a defect of the item found here while the assembler can still fix it.
+   * An element the answer does not show, or the question does not ask for, or that joins several points, is a defect of the item found here while the assembler can still fix it.
    */
   async verifyAsync(artifact, ctx, { model } = {}) {
     const claims = ctx.source?.digest?.claims ?? [];
@@ -148,10 +151,12 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
     const unmet = grade.marks.filter((m) => !m.met).map((m) => item.rubric.find((e) => e.id === m.elementId));
     for (const e of unmet) problems.push(`the model answer does not earn its own element for "${e.nodeId}" (${e.id}): "${e.requirement}". State that point in the model answer (within ${MAX_ANSWER_WORDS} words), or rewrite the requirement as one point the answer already shows`);
     const uncued = cue.cues.filter((c) => !c.cued);
+    const compound = cue.cues.filter((c) => c.cued && !c.onePoint);
+    for (const c of compound) problems.push(`element "${c.nodeId}" (${c.elementId}) joins several points (${c.reason}); an answer giving only one would be marked not met. Keep the ONE point this node adds, in a single clause`);
     for (const c of uncued) problems.push(`the lead-in does not ask for element "${c.nodeId}" (${c.elementId}): "${item.rubric.find((e) => e.id === c.elementId).requirement}" (${c.reason}). Reword the lead-in (still ONE question, naming no fact, mechanism, or option) so that an answer showing this point is a direct answer to it`);
     return {
       skipped: false, entailed: ent?.entailed ?? null, citedNotes: ent?.citedNotes ?? [], missingClause: ent?.missingClause ?? null,
-      answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id), uncued: uncued.map((c) => c.elementId),
+      answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id), uncued: uncued.map((c) => c.elementId), compound: compound.map((c) => c.elementId),
       usage: [ent?.usage, grade.usage, cue.usage].filter(Boolean), problems,
     };
   },
