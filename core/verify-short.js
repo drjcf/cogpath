@@ -59,6 +59,30 @@ export async function gradeAnswer({ item, answer, model, label }) {
   return { ...judgeGrade(res.json, item, answer), usage: res.usage };
 }
 
+/** Does the question, as worded, ask for what each element requires? (Answerability fails when a rubric element is something no answer to the question is expected to say.) */
+export function cueSchema(item) {
+  return assertStrict(obj({
+    elements: arr(obj({
+      elementId: enm(item.rubric.map((e) => e.id)),
+      cued: bool('true only if a complete, direct answer to the QUESTION, as worded, would be expected to show what this element requires'),
+      reason: str('One sentence: what in the question asks for it, or what a complete answer could leave out'),
+    }), 'One entry per element, in order'),
+  }));
+}
+
+export async function checkCues({ item, model, label }) {
+  const schema = cueSchema(item);
+  const res = await complete({
+    instructions: 'You judge the wording of an exam question against a rubric. An element is CUED when a complete, direct answer to the question as worded would be expected to show it. It is NOT CUED when a complete, correct answer could reasonably leave it out, for example when the question asks only what to do but the element needs the mechanism behind the problem, or the element needs a comparison with an alternative that the question never asks for. Judge only the wording of the question, not whether the element is true or whether the answer is right.',
+    parts: [part.text(scenario(item)), part.text(`RUBRIC ELEMENTS:\n${rubricText(item)}\n\nFor EACH element: cued or not cued by the QUESTION as worded.`)],
+    schema, schemaName: 'cues', effort: 'low', model, label, maxOutputTokens: 4096,
+    mock: () => ({ elements: item.rubric.map((e) => ({ elementId: e.id, cued: true, reason: '[MOCK] asked for' })) }),
+  });
+  const byId = new Map((res.json.elements ?? []).map((x) => [x.elementId, x]));
+  const cues = item.rubric.map((e) => ({ elementId: e.id, nodeId: e.nodeId, cued: byId.get(e.id)?.cued !== false, reason: byId.get(e.id)?.reason ?? '' }));
+  return { cues, uncued: cues.filter((c) => !c.cued).map((c) => c.elementId), usage: res.usage };
+}
+
 export async function verifyAnswerability({ trace, source, model }) {
   const item = trace.item;
   const schema = assertStrict(obj({ answer: str(`Your written answer: the decision and the reasoning behind it, in at most ${MAX_ANSWER_WORDS} words`) }));

@@ -28,7 +28,7 @@ export function buildShortSchema(path) {
   return assertStrict(obj({
     stem: str('A vignette: one specific case as a learner would meet it (presentation, relevant history, findings, setting), 3–6 sentences, embedding the case constraint as a concrete feature. It states NO recalled fact, figure, rate, mechanism, judgment, or plan: the learner must bring those. No reference to any source.'),
     constraintSpan: str('The sentence or phrase of the stem (copied from the stem, ≤ 30 words) that shows the case constraint as findings in the vignette\'s own voice; empty string only when the path has no case constraint'),
-    leadIn: str(`One question about THIS case that asks for the decision and the reasoning behind it, answerable in about ${MAX_ANSWER_WORDS} words (e.g. "What would you do for this patient, and why?"). An answer that shows every rubric element is a natural answer to it.`),
+    leadIn: str(`ONE question (one question mark) about THIS case, answerable in about ${MAX_ANSWER_WORDS} words, worded so that every rubric element is something it asks for: the decision, what is going on or why it matters, and why this choice rather than the alternatives (e.g. "What is happening to this patient, what would you do right now, and why that rather than the alternatives?"). It names no fact, mechanism, or option.`),
     modelAnswer: str(`The answer that earns full credit: the terminal artifact written as a concise written answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words, in the voice of a clinician answering the question. It states the decision and the reasoning, so every rubric element is visible in it.`),
     rubric: arr(obj({
       nodeId: enm(stepIds, 'The path node this element scores'),
@@ -92,7 +92,7 @@ Construct:
    It MUST embed the case constraint from step "${synStep.id}" as a concrete feature of this case: "${cc.feature}" (${cc.whyGenericInsufficient}). Rewrite the feature in the vignette's own voice as findings, history, or the patient's words (never paste it as a sentence about "a patient", never label it, never hint at its consequence), then copy the stem sentence that carries it into constraintSpan.` : `
    constraintSpan is "" (the path has no case constraint).`}
    The stem states NONE of the recalled facts, figures, rates, incidences, study results, mechanisms, judgments, or plans; the learner must bring them.
-2. A lead-in that is ONE question asking for the decision and the reasoning behind it, so that an answer can show every step of the path (for example "What would you do for this patient, and why?"). No options are given.
+2. A lead-in that is ONE question (one question mark, which may have several parts) worded so that every rubric element is something the question asks for. An expert who answers it fully, from the source and without seeing the rubric, must have reason to say each element; "What would you do, and why?" alone cues only the decision, not the mechanism or the comparison. Cue each kind of element by what it needs: a fact node by asking what is going on or why it matters, a relation node by asking what the findings show, an evaluate node by asking why this choice rather than the alternatives, the terminal node by asking what to do. For example: "What is happening to this patient, what would you do right now, and why that rather than the alternatives?" The lead-in names no fact, mechanism, or option. No options are given.
 3. A model answer of ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words: the "${terminal.op}" artifact of step "${terminal.id}" written as the answer a strong clinician would give, with its reasoning. It must carry what the synthesized plan adds for this case; an answer that only repeats what the source recommends is not the model answer.
 4. A rubric with EXACTLY ONE element per path node, in path order (${ctx.path.map((s) => s.id).join(', ')}). An element is what an answer must show to earn credit at that node:
    - recall node → the fact(s) the answer must bring (derivedFrom = one of that node's concept ids);
@@ -127,27 +127,32 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
   },
 
   /**
-   * Two model-backed checks on the assembled item, run together:
+   * Model-backed checks on the assembled item, run together:
    *  1. the model answer, as written, is not entailed by the source's claims (the synthesis may carry an adaptation that the answer drops);
-   *  2. the model answer earns every element of its own rubric (the in-loop counterpart of the modelAnswerScore verification:
-   *     an element the answer does not show is a defect of the item, found here while the assembler can still fix it).
+   *  2. the model answer earns every element of its own rubric (the in-loop counterpart of the modelAnswerScore verification);
+   *  3. the lead-in, as worded, asks for what every element requires (the in-loop counterpart of the answerability verification:
+   *     an element no answer to the question is expected to say can never be earned by an expert who has not seen the rubric).
+   * An element the answer does not show, or the question does not ask for, is a defect of the item found here while the assembler can still fix it.
    */
   async verifyAsync(artifact, ctx, { model } = {}) {
     const claims = ctx.source?.digest?.claims ?? [];
-    const { gradeAnswer } = await import('../verify-short.js'); // dynamic: verify-short imports the executor, which imports this module
+    const { gradeAnswer, checkCues } = await import('../verify-short.js'); // dynamic: verify-short imports the executor, which imports this module
     const item = finishShort(artifact);
-    const [ent, grade] = await Promise.all([
+    const [ent, grade, cue] = await Promise.all([
       claims.length ? entailedByNotes({ statement: artifact.modelAnswer, notes: notesFromClaims(claims, 'every claim of the source'), model, label: 'assemble_short:answer-digest-entailment', mockEntailed: false }) : null,
       gradeAnswer({ item, answer: artifact.modelAnswer, model, label: 'assemble_short:answer-vs-rubric' }),
+      checkCues({ item, model, label: 'assemble_short:leadin-cues' }),
     ]);
     const problems = [];
     if (ent?.entailed) problems.push(`the model answer as written is fully entailed by the source's own claims (${ent.citedNotes.join(', ')}); it dropped the adaptation. Rewrite it so it carries what the synthesized plan adds for this case (the clause the source does not state)`);
     const unmet = grade.marks.filter((m) => !m.met).map((m) => item.rubric.find((e) => e.id === m.elementId));
     for (const e of unmet) problems.push(`the model answer does not earn its own element for "${e.nodeId}" (${e.id}): "${e.requirement}". State that point in the model answer (within ${MAX_ANSWER_WORDS} words), or rewrite the requirement as one point the answer already shows`);
+    const uncued = cue.cues.filter((c) => !c.cued);
+    for (const c of uncued) problems.push(`the lead-in does not ask for element "${c.nodeId}" (${c.elementId}): "${item.rubric.find((e) => e.id === c.elementId).requirement}" (${c.reason}). Reword the lead-in (still ONE question, naming no fact, mechanism, or option) so that an answer showing this point is a direct answer to it`);
     return {
       skipped: false, entailed: ent?.entailed ?? null, citedNotes: ent?.citedNotes ?? [], missingClause: ent?.missingClause ?? null,
-      answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id),
-      usage: [ent?.usage, grade.usage].filter(Boolean), problems,
+      answerScore: grade.score, answerMax: grade.max, unmet: unmet.map((e) => e.id), uncued: uncued.map((c) => c.elementId),
+      usage: [ent?.usage, grade.usage, cue.usage].filter(Boolean), problems,
     };
   },
 
