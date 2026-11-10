@@ -9,6 +9,7 @@
  */
 import { judgePick, notesFor, necessitySummary } from './verifier.js';
 import { notesFromClaims } from './entail.js';
+import { judgeElements, shortNecessitySummary } from './verify-short.js';
 import { loadIngest } from './store.js';
 
 const UNDETERMINED = 'UNDETERMINED';
@@ -25,6 +26,43 @@ function rejudge(pick, notes) {
 function summaryOf(list) {
   const applicable = list.filter(([, v]) => v !== null);
   return { passed: applicable.filter(([, v]) => v).length, applicable: applicable.length, pass: applicable.every(([, v]) => v), checks: Object.fromEntries(list) };
+}
+
+/**
+ * A short-answer item's stored element picks, re-judged under the current rule (verify-short.judgeElements): necessity
+ * (notes rebuilt from the stored artifacts) and element mapping (notes rebuilt from the stored downstream artifacts).
+ * Recall checks and grading are model verdicts on text, not picks, and are left as they were.
+ */
+function rescoreShortItem(it, note) {
+  const v = it.verification; const tr = it.trace; const item = tr.item;
+  const redo = (p, notes) => {
+    if (!Array.isArray(p.elements)) return false;
+    const before = p.entailed.join(',');
+    p.elements = judgeElements({ elements: p.elements.map((e) => ({ elementId: e.elementId, fullyEntailed: e.raw, citedNotes: e.citedNotes, evidence: e.evidence, missingClause: e.missingClause })) }, item, notes);
+    p.entailed = p.elements.filter((e) => e.entailed).map((e) => e.elementId);
+    return before !== p.entailed.join(',');
+  };
+  const pn = v.pathNecessity;
+  if (pn?.picks) {
+    for (const p of pn.picks) if (redo(p, notesFor(tr.artifacts, tr.path.filter((s) => p.steps.includes(s.id))))) note(it.plan.id, `necessity ${p.without ? `without ${p.without}` : 'all'}: elements established now ${p.entailed.join(', ') || 'none'}`);
+    Object.assign(pn, shortNecessitySummary({ picks: pn.picks, rubric: item.rubric, path: tr.path }));
+  }
+  const em = v.elementMapping;
+  if (em?.perStep) {
+    const terminalEl = item.rubric.find((e) => e.nodeId === tr.path[tr.path.length - 1].id);
+    for (const p of em.perStep) {
+      if (!p.downstream || !redo(p, notesFor(p.downstream, tr.path))) continue;
+      const own = item.rubric.find((e) => e.nodeId === p.step);
+      p.terminalBlocked = !terminalEl || !p.entailed.includes(terminalEl.id); p.ownBroken = !own || !p.entailed.includes(own.id);
+      note(it.plan.id, `mapping ${p.step}: elements established now ${p.entailed.join(', ') || 'none'}`);
+    }
+    em.terminalBlocked = em.perStep.filter((p) => p.terminalBlocked).length; em.ownBroken = em.perStep.filter((p) => p.ownBroken).length; em.pass = em.terminalBlocked === em.total;
+  }
+  v.summary = summaryOf([
+    ['grounding', v.grounding?.skipped ? null : v.grounding?.pass ?? null], ['answerability', v.answerability?.pass ?? null], ['modelAnswerScore', v.modelAnswerScore?.pass ?? null],
+    ['sourceRecall', !v.sourceRecall || v.sourceRecall.skipped ? null : v.sourceRecall.pass], ['digestRecall', !v.digestRecall || v.digestRecall.skipped ? null : v.digestRecall.pass],
+    ['pathNecessity', pn ? pn.pass : null], ['elementMapping', em ? em.pass : null],
+  ]);
 }
 
 function rescoreRecallCheck(check, claims, item, heading) {
@@ -55,6 +93,7 @@ export async function rescoreBuild(build) {
   for (const it of build.items) {
     const v = it.verification; const tr = it.trace;
     if (!v || !tr?.item) continue;
+    if (tr.item.format === 'short') { rescoreShortItem(it, note); continue; }
     const item = tr.item;
     const pn = v.pathNecessity;
     if (pn?.picks) {
@@ -88,7 +127,7 @@ export async function rescoreBuild(build) {
   }
   for (const bl of build.baselines ?? []) {
     const v = bl.verification; const item = bl.trace?.item;
-    if (!v || !item) continue;
+    if (!v || !item || item.format === 'short') continue;
     if (rescoreRecallCheck(v.digestRecall, claims, item, 'claims')) note(`${bl.plan.id} (single-shot)`, `digestRecall pick ${v.digestRecall.rescoredFrom} → ${v.digestRecall.choice} (${v.digestRecall.pass ? 'pass' : 'FAIL'})`);
     if (rescoreRecallCheck(v.sourceRecall, recs, item, 'recommendation claims')) note(`${bl.plan.id} (single-shot)`, `sourceRecall pick ${v.sourceRecall.rescoredFrom} → ${v.sourceRecall.choice} (${v.sourceRecall.pass ? 'pass' : 'FAIL'})`);
     v.summary = summaryOf([['grounding', v.grounding?.skipped ? null : v.grounding?.pass ?? null], ['coverTheOptions', v.coverTheOptions?.pass ?? null], ['sourceRecall', !v.sourceRecall || v.sourceRecall.skipped ? null : v.sourceRecall.pass], ['digestRecall', !v.digestRecall || v.digestRecall.skipped ? null : v.digestRecall.pass], ['form', v.form?.pass ?? null]]);

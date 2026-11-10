@@ -344,3 +344,16 @@ pre.artifact { background: var(--field); padding: 10px 12px; border-radius: var(
   table.builds td { border-bottom: none; }
   table.builds tr { border-bottom: 1px solid var(--rule); }
 }
+
+/* short-answer items */
+.shortkey { margin: 10px 0; }
+.shortkey .modelanswer { padding: 10px 12px; background: var(--field); border-radius: 6px; margin-bottom: 10px; }
+.shortkey .rubric { width: 100%; border-collapse: collapse; font-size: 14px; }
+.shortkey .rubric th { text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--rule); }
+.shortkey .rubric td { vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); }
+.shortkey.compact .rubric { font-size: 13px; }
+.elements { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.elements .el { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 8px; background: var(--field); color: var(--muted); }
+.elements .el.on { background: var(--ok-bg, #e4f3e8); color: var(--ok, #1c6b38); }
+.marks { list-style: none; padding: 0; margin: 6px 0; }
+.marks li { margin: 6px 0; }

@@ -9,6 +9,7 @@ export default function Walkthrough({ trace }) {
   const [open, setOpen] = useState(() => new Set(trace.path.map((s) => s.id)));
   const toggle = (id) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const parsed = parsePathText(trace.pathText ?? '');
+  const short = trace.item?.format === 'short';
   const key = trace.item?.options?.find((o) => o.isKey);
   return (
     <div className="walk">
@@ -31,8 +32,8 @@ export default function Walkthrough({ trace }) {
         );
       })}
       <section className="walk-step step-key">
-        <div className="walk-head static"><span className="walk-n">{trace.path.length + 1}</span><span className="walk-title">The key</span></div>
-        <div className="walk-body"><p className="exam">{key?.text}</p><p className="muted">The synthesized plan, condensed to one option. Each wrong option is what a learner who failed at one step would choose.</p></div>
+        <div className="walk-head static"><span className="walk-n">{trace.path.length + 1}</span><span className="walk-title">{short ? 'The model answer' : 'The key'}</span></div>
+        <div className="walk-body"><p className="exam">{short ? trace.item.modelAnswer : key?.text}</p><p className="muted">{short ? 'The synthesized plan, written as the answer that earns full credit. The rubric has one scored element for each step above; an answer that misses a step loses that element.' : 'The synthesized plan, condensed to one option. Each wrong option is what a learner who failed at one step would choose.'}</p></div>
       </section>
     </div>
   );

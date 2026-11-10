@@ -92,11 +92,24 @@ export function judgePick(json, notes) {
   const out = { choice: json.choice, override: null, citationsFixed: [] };
   if (out.choice === UNDETERMINED) return out;
   const e = (json.entailment ?? []).find((x) => x.optionId === out.choice);
+  const j = judgeEntry(e, notes, 'chosen option');
+  out.override = j.override; out.citationsFixed = j.citationsFixed;
+  if (out.override) out.choice = UNDETERMINED;
+  return out;
+}
+
+/**
+ * The same discipline for one entailment claim (an option, or a rubric element): it stands only if marked fully
+ * entailed, with cited notes that exist and quoted evidence that occurs in the notes and bears on its clause.
+ * Returns { entailed, override, citationsFixed }. `noun` names the thing judged in the override reason.
+ */
+export function judgeEntry(e, notes, noun = 'claim') {
+  const out = { entailed: false, override: null, citationsFixed: [] };
   const unknown = (e?.citedNotes ?? []).filter((id) => !notes.ids.has(id));
-  if (!e || !e.fullyEntailed) out.override = 'chosen option not marked fully entailed';
-  else if ((e.citedNotes ?? []).length === 0) out.override = 'no notes cited (answer came from outside knowledge)';
+  if (!e || !e.fullyEntailed) { out.override = `${noun} not marked fully entailed`; return out; }
+  if ((e.citedNotes ?? []).length === 0) out.override = 'no notes cited (answer came from outside knowledge)';
   else if (unknown.length) out.override = `cited notes that do not exist: ${unknown.join(', ')}`;
-  else if ((e.evidence ?? []).length === 0) out.override = 'no quoted evidence for the chosen option';
+  else if ((e.evidence ?? []).length === 0) out.override = `no quoted evidence for the ${noun}`;
   else {
     const ids = [...notes.ids];
     const located = (e.evidence ?? []).map((ev) => {
@@ -113,7 +126,7 @@ export function judgePick(json, notes) {
       if (weak.length) out.override = `the notes do not carry the content of the clause(s): ${weak.map((b) => `"${String(b.ev.clause).slice(0, 50)}" (cited ${b.ev.noteId})`).join('; ')}`;
     }
   }
-  if (out.override) out.choice = UNDETERMINED;
+  out.entailed = !out.override;
   return out;
 }
 
@@ -265,7 +278,7 @@ export function scrubCorruptedQuotes(original, corrupted) {
   return out;
 }
 
-async function corruptArtifact({ trace, source, stepIndex, model }) {
+export async function corruptArtifact({ trace, source, stepIndex, model }) {
   const step = trace.path[stepIndex];
   const op = getOp(step.op);
   if (op.id === 'synthesize') return corruptSynthesize(trace.artifacts[step.id], step.id);
@@ -287,7 +300,7 @@ async function corruptArtifact({ trace, source, stepIndex, model }) {
 }
 
 /** A source stand-in for re-runs that must not be able to repair a corrupted artifact from the text. */
-function withheldSource(source) {
+export function withheldSource(source) {
   return { ...source, text: '', parts: [part.text('SOURCE: withheld for this exercise. Work ONLY from the artifacts of earlier steps. Where a field asks for a quotation, copy the most relevant text from those artifacts.')] };
 }
 
@@ -321,6 +334,7 @@ export async function verifyDistractorMapping({ trace, source, model, onEvent })
 // ─── runner ─────────────────────────────────────────────────
 
 export async function verifyItem({ trace, source, model, deep = false, onEvent }) {
+  if ((trace.item?.format ?? 'mcq') === 'short') return (await import('./verify-short.js')).verifyShortItem({ trace, source, model, deep, onEvent });
   const grounding = verifyGrounding(trace, source.text);
   const coverTheOptions = await verifyCoverTheOptions({ trace, source, model });
   const sourceRecall = await verifySourceRecall({ trace, source, model });

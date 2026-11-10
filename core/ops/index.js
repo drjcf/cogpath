@@ -11,9 +11,21 @@ import analyze from './analyze.js';
 import evaluate from './evaluate.js';
 import synthesize from './synthesize.js';
 import assemble from './assemble.js';
+import assembleShort from './assemble-short.js';
 
 export const OPS = { recall, analyze, evaluate, synthesize };
 export const ASSEMBLE = assemble;
+export const ASSEMBLE_SHORT = assembleShort;
+
+/** The answer formats an item can take. 'mcq' keeps the original single-best-answer item. */
+export const FORMATS = ['mcq', 'short'];
+export const DEFAULT_FORMAT = 'mcq';
+
+export function assemblerFor(format = DEFAULT_FORMAT) {
+  if (format === 'mcq') return assemble;
+  if (format === 'short') return assembleShort;
+  throw new Error(`Unknown format '${format}'. Known: ${FORMATS.join(', ')}`);
+}
 
 export function getOp(id) {
   const op = OPS[id];

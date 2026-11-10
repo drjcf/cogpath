@@ -29,9 +29,9 @@ function slim(e) {
     case 'item:done': return { ...base, item: e.plan.id, status: e.status, pass: e.verification ? `${e.verification.summary.passed}/${e.verification.summary.applicable}` : null, necessity: e.verification?.pathNecessity?.determinedAt ?? null, digestRecall: e.verification?.digestRecall?.pass ?? null };
     case 'baseline:start': return { ...base, item: e.plan.id };
     case 'baseline:done': return { ...base, item: e.plan.id, status: e.status ?? 'done', pass: e.verification ? `${e.verification.summary.passed}/${e.verification.summary.applicable}` : null, error: e.error ?? null };
-    case 'verify:sourceRecall': case 'verify:digestRecall': return { ...base, choice: e.choice, lean: e.lean ?? null, skipped: Boolean(e.skipped) };
-    case 'verify:necessity': return { ...base, k: e.k, choice: e.choice, lean: e.lean ?? null, override: e.override ?? null };
-    case 'verify:mapping': return { ...base, step: e.step, picked: e.picked, lean: e.lean ?? null, keyBlocked: e.keyBlocked, landed: e.landed };
+    case 'verify:sourceRecall': case 'verify:digestRecall': return { ...base, choice: e.choice ?? null, lean: e.lean ?? null, entailed: e.entailed ?? null, skipped: Boolean(e.skipped) };
+    case 'verify:necessity': return { ...base, k: e.k, without: e.without ?? null, choice: e.choice ?? null, lean: e.lean ?? null, override: e.override ?? null, entailed: e.entailed ?? null };
+    case 'verify:mapping': return { ...base, step: e.step, picked: e.picked ?? null, lean: e.lean ?? null, keyBlocked: e.keyBlocked ?? null, landed: e.landed ?? null, entailed: e.entailed ?? null, terminalBlocked: e.terminalBlocked ?? null };
     default: return null;
   }
 }
@@ -57,7 +57,7 @@ async function runIngest(job) {
 }
 
 async function runBuild(job) {
-  const { sha, items = 5, path: pathHint = null, paths = null, deep = true, baseline = true, seed, model = DEFAULT_MODEL, buildId, allowDraft = false } = job.params;
+  const { sha, items = 5, path: pathHint = null, paths = null, deep = true, baseline = true, seed, model = DEFAULT_MODEL, buildId, allowDraft = false, format = 'mcq' } = job.params;
   const composed = paths?.length ? paths : pathHint ? [pathHint] : null;
   for (const p of composed ?? []) parsePath(p);
   const ing = await loadIngest(sha);
@@ -68,7 +68,7 @@ async function runBuild(job) {
   const source = { ...withDigest(raw, ing.digest, 'digest'), digestReview: ing.status };
   const onEvent = (e) => { const s = slim(e); if (s) appendBuildEvent(buildId, s).catch((err) => log('event write failed', err.message)); };
   try {
-    const { result } = await buildFlow({ source, n: Number(items), paths: composed, model, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed != null ? Number(seed) : undefined, id: buildId, by: job.by, jobId: job.id, onEvent });
+    const { result } = await buildFlow({ source, n: Number(items), paths: composed, model, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed != null ? Number(seed) : undefined, id: buildId, by: job.by, jobId: job.id, onEvent, format });
     return { buildId, status: result.status, items: result.items.length };
   } catch (e) {
     await updateBuildSummary(buildId, { status: 'failed', error: { message: e.message }, finishedAt: new Date().toISOString() });

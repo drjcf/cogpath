@@ -29,7 +29,7 @@ export const api = {
   decideItem: (id, itemId, body) => req(`/builds/${id}/items/${itemId}/decide`, { method: 'POST', body: JSON.stringify(body) }),
   items: (status = 'certified') => req(`/items?status=${status}`),
   ops: () => req('/ops'),
-  checkPaths: (paths) => req('/paths/check', { method: 'POST', body: JSON.stringify({ paths }) }),
+  checkPaths: (paths, format) => req('/paths/check', { method: 'POST', body: JSON.stringify({ paths, format }) }),
   job: (id) => req(`/jobs/${id}`),
   jobs: () => req('/jobs'),
   /** PDF bytes for the viewer (fetched, not referenced by URL, so the identity header travels with it). */

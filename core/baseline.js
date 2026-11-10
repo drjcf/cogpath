@@ -7,9 +7,12 @@
  * which is the point of the comparison.
  */
 import { obj, arr, str, bool, assertStrict, validate } from './schema.js';
+import { DEFAULT_FORMAT } from './ops/index.js';
 import { complete, part } from './llm.js';
 import { PREAMBLE } from './executor.js';
 import { itemShapeProblems } from './ops/assemble.js';
+import { shortShapeProblems, MIN_ANSWER_WORDS, MAX_ANSWER_WORDS } from './ops/assemble-short.js';
+import { verifyAnswerability, verifyModelAnswerScore, verifyShortRecall } from './verify-short.js';
 import { verifyCoverTheOptions, verifySourceRecall, verifyDigestRecall, spanFound } from './verifier.js';
 import { newId } from './executor.js';
 
@@ -56,7 +59,8 @@ export function baselineProblems(json) {
 }
 
 /** One single-shot item with one repair attempt. Returns a trace-like record { id, kind:'baseline', item, usage, ms, problems, attempts }. */
-export async function runBaseline({ source, focus, model, seed, label = 'baseline' }) {
+export async function runBaseline({ source, focus, model, seed, label = 'baseline', format = DEFAULT_FORMAT }) {
+  if (format === 'short') return runShortBaseline({ source, focus, model, label });
   const id = newId('base');
   const t0 = Date.now();
   const instruction = baselineInstruction({ focus });
@@ -84,6 +88,7 @@ export async function runBaseline({ source, focus, model, seed, label = 'baselin
 /** Item-level checks that apply to any item: evidence grounding, cover-the-options, source recall, form. */
 export async function verifyBaseline({ trace, source, model }) {
   const item = trace.item;
+  if (item.format === 'short') return verifyShortBaseline({ trace, source, model });
   const checks = (item.evidence ?? []).map((span) => ({ span, ...spanFound(span, source.text ?? '') }));
   const grounding = source.text ? { skipped: false, checked: checks.length, found: checks.filter((c) => c.found).length, missing: checks.filter((c) => !c.found), pass: checks.length > 0 && checks.every((c) => c.found) } : { skipped: true, reason: 'no local source text' };
   const coverTheOptions = await verifyCoverTheOptions({ trace, source, model });
@@ -109,5 +114,97 @@ function mockBaseline(source) {
     ],
     evidence: [words.slice(5, 14).join(' '), words.slice(30, 40).join(' ')],
     explanation: '[MOCK] Recall, analyze, evaluate, synthesize.',
+  };
+}
+
+// ─── short-answer control ───────────────────────────────────
+
+export const SHORT_BASELINE_SCHEMA = assertStrict(obj({
+  stem: str('A vignette: one specific case as a learner would meet it, 3–6 sentences. No recalled figures, rates, mechanisms, judgments, or plans; no reference to any source.'),
+  leadIn: str('One question about this case that asks for the decision and the reasoning behind it, answerable in 2 to 4 sentences'),
+  modelAnswer: str(`The answer that earns full credit, ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words: the decision and the reasoning`),
+  rubric: arr(obj({
+    requirement: str('What an answer must show to earn this element: one sentence a grader can mark met or not met from the answer alone'),
+    commonError: str('What an answer that misses this element typically says or does instead (one sentence)'),
+  }), '3 to 6 elements'),
+  evidence: arr(str('Verbatim quotation (≤ 40 words) from the source supporting a fact the item depends on'), 'The source facts the item rests on, quoted verbatim'),
+}));
+
+export function shortBaselineInstruction({ focus }) {
+  return `Write ONE short-answer item for specialty board examinees${focus ? ` on this focus: ${focus}` : ''}.
+The item must require the examinee to recall the relevant facts, analyze the causal relations among them, evaluate competing strategies, and synthesize a plan adapted to the specific case. Make full credit depend on all four, not on remembering a recommendation.
+
+Rules:
+- The stem is a vignette: one specific case (presentation, history, findings, setting). It states none of the facts, figures, rates, mechanisms, judgments, or plans the examinee must bring. Never refer to "the article", "the study", or "the source".
+- The lead-in is ONE question asking for the decision and the reasoning behind it.
+- The model answer is ${MIN_ANSWER_WORDS} to ${MAX_ANSWER_WORDS} words.
+- The rubric has 3 to 6 elements. Each is one sentence a grader can mark met or not met from the answer alone, specific to this case and visible in the model answer; together they cover recall, analysis, evaluation, and synthesis.
+- Quote, verbatim, the source facts the item rests on in "evidence".`;
+}
+
+export function shortBaselineProblems(json) {
+  const problems = [];
+  if (json.rubric.length < 3 || json.rubric.length > 6) problems.push(`expected 3 to 6 rubric elements, got ${json.rubric.length}`);
+  if (!json.evidence?.length) problems.push('no evidence quoted');
+  problems.push(...shortShapeProblems(json));
+  return problems;
+}
+
+async function runShortBaseline({ source, focus, model, label }) {
+  const id = newId('base');
+  const t0 = Date.now();
+  const instruction = shortBaselineInstruction({ focus });
+  const attempts = [];
+  let feedback = '';
+  let last = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const res = await complete({
+      instructions: PREAMBLE, parts: [...source.parts, part.text(instruction + feedback)],
+      schema: SHORT_BASELINE_SCHEMA, schemaName: 'baseline_short_item', effort: 'high', model, maxOutputTokens: 16384, summary: 'auto', label: `${label}:${attempt}`,
+      mock: () => mockShortBaseline(source),
+    });
+    const v = validate(SHORT_BASELINE_SCHEMA, res.json);
+    const problems = v.ok ? shortBaselineProblems(res.json) : v.errors.map((e) => `schema: ${e}`);
+    attempts.push({ attempt, problems, usage: res.usage, ms: res.ms });
+    last = { json: res.json, problems, usage: res.usage, reasoningSummary: res.reasoningSummary, mock: res.mock, notes: res.notes };
+    if (res.mock || problems.length === 0) break;
+    feedback = `\n\nYOUR PREVIOUS ATTEMPT WAS REJECTED FOR THESE REASONS; FIX ALL OF THEM:\n- ${problems.join('\n- ')}`;
+  }
+  const j = last.json;
+  const rubric = j.rubric.map((e, i) => ({ id: `e${i + 1}`, points: 1, nodeId: 'none', derivedFrom: 'none', ...e }));
+  const item = { format: 'short', stem: j.stem, leadIn: j.leadIn, modelAnswer: j.modelAnswer, rubric, maxPoints: rubric.length, key: null, evidence: j.evidence };
+  const usage = attempts.reduce((u, a) => ({ input_tokens: u.input_tokens + (a.usage?.input_tokens ?? 0), output_tokens: u.output_tokens + (a.usage?.output_tokens ?? 0), cached_tokens: u.cached_tokens + (a.usage?.cached_tokens ?? 0), reasoning_tokens: u.reasoning_tokens + (a.usage?.reasoning_tokens ?? 0), calls: u.calls + 1 }), { input_tokens: 0, output_tokens: 0, cached_tokens: 0, reasoning_tokens: 0, calls: 0 });
+  return { id, kind: 'baseline', format: 'short', status: 'done', createdAt: new Date().toISOString(), model, focus: focus ?? null, source: { kind: source.kind, title: source.title, sha: source.sha ?? null, mode: source.mode ?? 'raw' }, item, problems: last.problems, attempts, reasoningSummary: last.reasoningSummary, totals: { ...usage, ms: Date.now() - t0 }, verification: null };
+}
+
+/** The checks both arms share: evidence grounding, answerability, the rubric's fit to the model answer, source recall, form. */
+async function verifyShortBaseline({ trace, source, model }) {
+  const item = trace.item;
+  const checks = (item.evidence ?? []).map((span) => ({ span, ...spanFound(span, source.text ?? '') }));
+  const grounding = source.text ? { skipped: false, checked: checks.length, found: checks.filter((c) => c.found).length, missing: checks.filter((c) => !c.found), pass: checks.length > 0 && checks.every((c) => c.found) } : { skipped: true, reason: 'no local source text' };
+  const answerability = await verifyAnswerability({ trace, source, model });
+  const modelAnswerScore = await verifyModelAnswerScore({ trace, model });
+  const sourceRecall = await verifyShortRecall({ trace, source, model, which: 'sourceRecall' });
+  const digestRecall = await verifyShortRecall({ trace, source, model, which: 'digestRecall' });
+  const problems = shortShapeProblems(item);
+  const form = { problems, pass: problems.length === 0 };
+  const list = [['grounding', grounding.skipped ? null : grounding.pass], ['answerability', answerability.pass], ['modelAnswerScore', modelAnswerScore.pass], ['sourceRecall', sourceRecall.skipped ? null : sourceRecall.pass], ['digestRecall', digestRecall.skipped ? null : digestRecall.pass], ['form', form.pass]];
+  const applicable = list.filter(([, v]) => v !== null);
+  return { format: 'short', grounding, answerability, modelAnswerScore, sourceRecall, digestRecall, form, pathNecessity: null, elementMapping: null, summary: { passed: applicable.filter(([, v]) => v).length, applicable: applicable.length, pass: applicable.every(([, v]) => v), checks: Object.fromEntries(list) } };
+}
+
+function mockShortBaseline(source) {
+  const words = String(source.text ?? '').split(/\s+/);
+  return {
+    stem: '[MOCK] A patient presents with a specific feature of the case. The setting is an outpatient clinic. A decision is needed now.',
+    leadIn: '[MOCK] What would you do for this patient, and why?',
+    modelAnswer: '[MOCK] The plan that integrates every step of the reasoning, with the facts it rests on, the relations among them, and the strategy chosen for this case.',
+    rubric: [
+      { requirement: '[MOCK] The answer brings the relevant facts.', commonError: '[MOCK] An answer that misremembers a fact.' },
+      { requirement: '[MOCK] The answer connects the facts into a relation.', commonError: '[MOCK] An answer that misreads the relation.' },
+      { requirement: '[MOCK] The answer weighs the strategies and chooses one.', commonError: '[MOCK] An answer that picks the runner-up.' },
+      { requirement: '[MOCK] The answer adapts the plan to the case.', commonError: '[MOCK] An answer that applies the generic plan.' },
+    ],
+    evidence: [words.slice(5, 14).join(' '), words.slice(30, 40).join(' ')],
   };
 }

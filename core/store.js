@@ -272,7 +272,7 @@ export async function saveRun(trace, opts) { return (await store()).saveRun(trac
 export function buildSummary(build, summarize) {
   const s = summarize(build);
   return {
-    id: build.id, status: build.status, createdAt: build.createdAt, finishedAt: build.finishedAt ?? null, model: build.model, source: build.source, n: build.n, deep: build.deep, pathHint: build.pathHint ?? null, paths: build.paths ?? null, pathMode: build.pathMode ?? (build.pathHint ? 'composed' : 'planner'),
+    id: build.id, status: build.status, createdAt: build.createdAt, finishedAt: build.finishedAt ?? null, format: build.format ?? 'mcq', model: build.model, source: build.source, n: build.n, deep: build.deep, pathHint: build.pathHint ?? null, paths: build.paths ?? null, pathMode: build.pathMode ?? (build.pathHint ? 'composed' : 'planner'),
     baselines: build.baselines?.length ?? 0, rates: s.rates, totals: build.totals, error: build.error ?? null, by: build.by ?? null, jobId: build.jobId ?? null,
     items: s.rows.map((r) => ({ id: r.id, status: r.status, pass: r.pass, necessity: r.necessity, digestRecall: r.digestRecall, focus: r.focus, path: r.path })),
     progress: build.progress ?? null, rescored: build.rescored?.length ?? 0,
@@ -368,13 +368,15 @@ export function exportItem(build, rec, decision) {
     id: `${build.id}/${rec.plan.id}`, build: build.id, item: rec.plan.id,
     source: { title: build.source?.title ?? null, sha: build.source?.sha ?? null, claims: rec.plan.claims ?? [] },
     focus: rec.plan.focus, path: rec.plan.path, model: build.model,
+    format: item.format ?? 'mcq',
     stem: item.stem, leadIn: item.leadIn,
-    options: item.options.map((o) => ({ letter: o.id, text: o.text, key: Boolean(o.isKey), failsAt: o.failsAt === 'none' ? null : o.failsAt, rationale: o.failureRationale ?? null })),
-    key: item.key,
+    ...(item.format === 'short'
+      ? { modelAnswer: item.modelAnswer, rubric: item.rubric.map((e) => ({ id: e.id, node: e.nodeId, requirement: e.requirement, commonError: e.commonError, derivedFrom: e.derivedFrom, points: e.points })), maxPoints: item.maxPoints, options: null, key: null }
+      : { options: item.options.map((o) => ({ letter: o.id, text: o.text, key: Boolean(o.isKey), failsAt: o.failsAt === 'none' ? null : o.failsAt, rationale: o.failureRationale ?? null })), key: item.key }),
     explanation: item.explanation ?? null,
-    verification: v ? { passed: v.summary.passed, applicable: v.summary.applicable, pass: v.summary.pass, necessity: v.pathNecessity?.determinedAt ?? null, pathLength: v.pathNecessity?.pathLength ?? null, digestRecall: v.digestRecall?.skipped ? null : v.digestRecall?.pass ?? null, sourceRecall: v.sourceRecall?.skipped ? null : v.sourceRecall?.pass ?? null, cover: v.coverTheOptions?.pass ?? null, keyBlocked: v.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : null } : null,
+    verification: v ? { passed: v.summary.passed, applicable: v.summary.applicable, pass: v.summary.pass, necessity: v.pathNecessity?.determinedAt ?? null, pathLength: v.pathNecessity?.pathLength ?? null, digestRecall: v.digestRecall?.skipped ? null : v.digestRecall?.pass ?? null, sourceRecall: v.sourceRecall?.skipped ? null : v.sourceRecall?.pass ?? null, cover: (v.coverTheOptions ?? v.answerability)?.pass ?? null, keyBlocked: v.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : v.elementMapping ? `${v.elementMapping.terminalBlocked}/${v.elementMapping.total}` : null } : null,
     // The single-shot control on the same focus, when the build ran one: the checks both arms share.
-    control: bv ? { pass: bv.summary.pass, digestRecall: bv.digestRecall?.skipped ? null : bv.digestRecall?.pass ?? null, sourceRecall: bv.sourceRecall?.skipped ? null : bv.sourceRecall?.pass ?? null, cover: bv.coverTheOptions?.pass ?? null } : null,
+    control: bv ? { pass: bv.summary.pass, digestRecall: bv.digestRecall?.skipped ? null : bv.digestRecall?.pass ?? null, sourceRecall: bv.sourceRecall?.skipped ? null : bv.sourceRecall?.pass ?? null, cover: (bv.coverTheOptions ?? bv.answerability)?.pass ?? null } : null,
     decision: decision ?? { status: 'pending' },
     builtAt: rec.trace.createdAt ?? build.createdAt, by: build.by ?? null,
   };

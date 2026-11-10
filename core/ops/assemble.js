@@ -94,6 +94,37 @@ export function itemShapeProblems(item) {
   return problems;
 }
 
+/**
+ * What a vignette stem must satisfy whatever the answer format: it carries the case constraint verbatim, does not state
+ * why the generic plan fails or restate the synthesized plan, and hands over none of the recalled facts or their figures.
+ */
+export function stemProblems(artifact, ctx) {
+  const problems = [];
+  // The vignette must carry the case constraint verbatim and must not hand over the recalled facts.
+  const cc = ctx.path.map((s) => ctx.artifacts[s.id]?.caseConstraint).filter(Boolean).pop();
+  if (cc) {
+    if (!artifact.constraintSpan.trim()) problems.push('constraintSpan is empty but the path has a case constraint');
+    else if (!spanFound(artifact.constraintSpan, artifact.stem).found) problems.push('constraintSpan is not found in the stem');
+    else if (!clauseSupported(cc.feature, artifact.constraintSpan)) problems.push('constraintSpan does not carry the case constraint (no content in common with the feature)');
+    if (/\b(a|the) patient (requests|presents|declines|with|who)\b/i.test(artifact.stem) && /\b(she|he|her|his)\b/i.test(artifact.stem)) problems.push('stem switches from the vignette\'s voice to "a patient …": write the constraint as this patient\'s findings or words');
+    // The stem shows the feature; it must not state why the generic plan fails (that inference is the examinee's).
+    if (spanFound(cc.whyGenericInsufficient, artifact.stem).found) problems.push('stem states the consequence of the case constraint (whyGenericInsufficient); show the feature as findings only');
+    const synth = ctx.artifacts[ctx.path[ctx.path.length - 1].id]?.synthesis?.statement;
+    if (synth && spanFound(synth, artifact.stem).found) problems.push('stem restates the synthesized plan');
+  }
+  for (const st of ctx.path.filter((s) => s.op === 'recall')) {
+    for (const c of ctx.artifacts[st.id]?.concepts ?? []) {
+      if (spanFound(c.statement, artifact.stem).found || spanFound(c.sourceSpan, artifact.stem).found) problems.push(`stem restates recalled fact ${c.id}; the learner must bring it`);
+      // Figures (with thousands separators, decimals, -fold, %) of two or more digits, or any figure with a suffix.
+      const nums = (`${c.statement} ${c.sourceSpan}`.match(/\d[\d,]*(?:\.\d+)?(?:-fold|%)?/g) ?? []).filter((n) => /-fold|%/.test(n) || n.replace(/\D/g, '').length >= 2);
+      const stemDigits = wordsToDigits(artifact.stem);
+      const leaked = [...new Set(nums)].filter((n) => artifact.stem.includes(n) || stemDigits.includes(n.replace(/,/g, '')));
+      if (leaked.length) problems.push(`stem states figures from recalled fact ${c.id} (${leaked.join(', ')}); remove them`);
+    }
+  }
+  return problems;
+}
+
 export default {
   id: 'assemble',
   label: 'Assemble item',
@@ -163,28 +194,7 @@ Never refer to "the article", "the study", "the source", or "the text" anywhere 
     }
     const explained = artifact.explanation.map((e) => e.step);
     if (explained.join(',') !== plan.stepIds.join(',')) problems.push(`explanation steps ${explained.join(',')} ≠ path ${plan.stepIds.join(',')}`);
-    // The vignette must carry the case constraint verbatim and must not hand over the recalled facts.
-    const cc = ctx.path.map((s) => ctx.artifacts[s.id]?.caseConstraint).filter(Boolean).pop();
-    if (cc) {
-      if (!artifact.constraintSpan.trim()) problems.push('constraintSpan is empty but the path has a case constraint');
-      else if (!spanFound(artifact.constraintSpan, artifact.stem).found) problems.push('constraintSpan is not found in the stem');
-      else if (!clauseSupported(cc.feature, artifact.constraintSpan)) problems.push('constraintSpan does not carry the case constraint (no content in common with the feature)');
-      if (/\b(a|the) patient (requests|presents|declines|with|who)\b/i.test(artifact.stem) && /\b(she|he|her|his)\b/i.test(artifact.stem)) problems.push('stem switches from the vignette\'s voice to "a patient …": write the constraint as this patient\'s findings or words');
-      // The stem shows the feature; it must not state why the generic plan fails (that inference is the examinee's).
-      if (spanFound(cc.whyGenericInsufficient, artifact.stem).found) problems.push('stem states the consequence of the case constraint (whyGenericInsufficient); show the feature as findings only');
-      const synth = ctx.artifacts[ctx.path[ctx.path.length - 1].id]?.synthesis?.statement;
-      if (synth && spanFound(synth, artifact.stem).found) problems.push('stem restates the synthesized plan');
-    }
-    for (const st of ctx.path.filter((s) => s.op === 'recall')) {
-      for (const c of ctx.artifacts[st.id]?.concepts ?? []) {
-        if (spanFound(c.statement, artifact.stem).found || spanFound(c.sourceSpan, artifact.stem).found) problems.push(`stem restates recalled fact ${c.id}; the learner must bring it`);
-        // Figures (with thousands separators, decimals, -fold, %) of two or more digits, or any figure with a suffix.
-        const nums = (`${c.statement} ${c.sourceSpan}`.match(/\d[\d,]*(?:\.\d+)?(?:-fold|%)?/g) ?? []).filter((n) => /-fold|%/.test(n) || n.replace(/\D/g, '').length >= 2);
-        const stemDigits = wordsToDigits(artifact.stem);
-        const leaked = [...new Set(nums)].filter((n) => artifact.stem.includes(n) || stemDigits.includes(n.replace(/,/g, '')));
-        if (leaked.length) problems.push(`stem states figures from recalled fact ${c.id} (${leaked.join(', ')}); remove them`);
-      }
-    }
+    problems.push(...stemProblems(artifact, ctx));
     problems.push(...itemShapeProblems(artifact));
     return problems;
   },

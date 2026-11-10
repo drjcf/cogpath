@@ -9,6 +9,7 @@ import { api } from '../../lib/api.js';
 import { useSession, canWrite } from '../../lib/auth.js';
 import PathGlyph, { StepDot } from '../../components/PathGlyph.jsx';
 import Walkthrough from '../../components/Walkthrough.jsx';
+import ShortKey from '../../components/ShortKey.jsx';
 import { isBranched, stepTitle } from '../../lib/path.js';
 
 const Verdict = ({ ok, children }) => <span className={`verdict ${ok === null || ok === undefined ? 'na' : ok ? 'ok' : 'bad'}`}>{children ?? (ok === null || ok === undefined ? 'not run' : ok ? 'yes' : 'no')}</span>;
@@ -81,6 +82,56 @@ function RecallCheck({ question, r, keyId, passMeans, noun = 'claims' }) {
   );
 }
 
+/** Which rubric elements a set of notes established: element chips, lit when established. */
+function Elements({ rubric, entailed }) {
+  return <span className="elements">{rubric.map((e) => <span key={e.id} className={`el ${entailed.includes(e.id) ? 'on' : ''}`} title={e.requirement}>{e.id}</span>)}</span>;
+}
+
+/** The marks a grader gave an answer: every rubric element, met or not, with the quote that earned it. */
+function Marks({ rubric, marks }) {
+  return (
+    <ul className="marks">
+      {rubric.map((e) => { const m = marks.find((x) => x.elementId === e.id); return <li key={e.id}><span className={`verdict ${m?.met ? 'ok' : 'bad'}`}>{m?.met ? 'met' : 'not met'}</span> <span className="exam">{e.requirement}</span>{m?.met ? <blockquote className="span">{m.evidence}</blockquote> : m?.override ? <span className="muted small"> ({m.override})</span> : null}</li>; })}
+    </ul>
+  );
+}
+
+function ShortRecallCheck({ question, r, passMeans }) {
+  if (!r || r.skipped) return <div className="check"><div className="check-q">{question}</div><Verdict ok={null} /><span className="muted">{r?.reason ?? 'not run'}</span></div>;
+  return (
+    <div className="check">
+      <div className="check-q">{question}</div>
+      <Verdict ok={r.pass}>{r.pass ? 'no' : 'yes'}</Verdict>
+      <span className="check-a">{r.pass ? `${r.missingClause ? `The model answer's "${r.missingClause}" is not established by them. ` : ''}${passMeans}` : `Every part of the model answer is established by them, citing ${(r.citedNotes ?? []).join(', ')}.`}</span>
+    </div>
+  );
+}
+
+function ShortChecks({ v, item, path = null }) {
+  const pn = v.pathNecessity;
+  const em = v.elementMapping;
+  const [open, setOpen] = useState(() => Math.max(0, pn.picks.findIndex((p) => p.without != null && ((p.entailed ?? []).length > 0))));
+  const p = pn.picks[open];
+  const label = (x) => (x.without ? `without ${stepTitle(x.without, path)}` : 'every step');
+  return (
+    <div className="checks">
+      <div className="check"><div className="check-q">Are the quoted facts really in the article?</div><Verdict ok={v.grounding.skipped ? null : v.grounding.pass} /><span className="check-a">{v.grounding.skipped ? v.grounding.reason : `${v.grounding.found} of ${v.grounding.checked} quoted spans found verbatim in the extracted text.`}</span></div>
+      <div className="check tall"><div className="check-q">Can an expert with the article, shown no rubric, earn every element?</div><Verdict ok={v.answerability.pass}>{v.answerability.score} of {v.answerability.max}</Verdict><span className="check-a">An expert with the article wrote an answer; a grader scored it against the rubric and quoted the answer for each element it credited.<details><summary>the expert's answer and the marks</summary><p className="exam">{v.answerability.answer}</p><Marks rubric={item.rubric} marks={v.answerability.marks} /></details></span></div>
+      <div className="check tall"><div className="check-q">Does the model answer earn every element?</div><Verdict ok={v.modelAnswerScore.pass}>{v.modelAnswerScore.score} of {v.modelAnswerScore.max}</Verdict><span className="check-a">The same grader scored the model answer. A rubric the model answer cannot satisfy is not a usable key.<details><summary>marks</summary><Marks rubric={item.rubric} marks={v.modelAnswerScore.marks} /></details></span></div>
+      <ShortRecallCheck question="Could the model answer be found in the article's claims alone?" r={v.digestRecall} passMeans="The answer needs reasoning beyond what the article states." />
+      <ShortRecallCheck question="Could the model answer be found in the article's recommendations alone?" r={v.sourceRecall} passMeans="The item is not a restatement of a recommendation." />
+      <div className="check tall"><div className="check-q">Does every step earn its element?</div><Verdict ok={pn.pass}>{pn.pass ? 'yes' : 'no'}</Verdict><span className="check-a">For each step in turn, a reader who may use only the artifacts of the other steps (without the steps that depend on it), and must quote them, is asked which rubric elements those notes establish; then once with every step. With a step withheld, neither its element nor the final element may be established; with every step, all of them must be. {pn.verdict}.</span>
+        <div className="necessity">
+          <div className="picks">{pn.picks.map((x, i) => <button key={i} type="button" className={`pick ${x.without != null && x.entailed.length ? 'hit' : ''} ${open === i ? 'open' : ''}`} onClick={() => setOpen(i)}><span className="pick-k">{label(x)}</span><span className="pick-v">{x.entailed.length ? x.entailed.join(' ') : 'none'}</span></button>)}</div>
+          {p ? <div className="pickdetail"><p className="muted">Given only the artifacts of {p.steps.length ? p.steps.map((s) => stepTitle(s, path)).join(', ') : 'no steps'}, the reader found these elements established: <Elements rubric={item.rubric} entailed={p.entailed} /></p>
+            <ul className="marks">{p.elements.filter((e) => e.raw || e.entailed).map((e) => <li key={e.elementId}><span className={`verdict ${e.entailed ? 'ok' : 'na'}`}>{e.entailed ? 'established' : 'claimed, not verified'}</span> {e.elementId}{e.override ? <span className="muted small"> ({e.override})</span> : null}{(e.evidence ?? []).slice(0, 2).map((ev, j) => <blockquote key={j} className="span">{ev.quote}</blockquote>)}</li>)}</ul></div> : null}
+        </div></div>
+      <div className="check tall"><div className="check-q">Does an error at any step break the answer?</div>{em ? <><Verdict ok={em.pass}>{em.terminalBlocked} of {em.total}</Verdict><span className="check-a">Each step in turn is replaced by the error a learner who failed there would make, the steps that depend on it are re-run, and the reader is asked which elements the notes now establish. The final element must not be among them.</span>
+        <ul className="mapping">{em.perStep.map((x) => <li key={x.step}><StepDot step={x.step} path={path}>{stepTitle(x.step, path)} corrupted</StepDot><span>{x.entailed.length ? <>still established: <Elements rubric={item.rubric} entailed={x.entailed} /></> : 'nothing established'}, final element {x.terminalBlocked ? 'blocked' : 'still reached'}{x.ownBroken ? ', its own element broken' : ''}</span></li>)}</ul></> : <><Verdict ok={null} /><span className="muted">not run for this build (deep verification was off)</span></>}</div>
+    </div>
+  );
+}
+
 function Checks({ v, item, path = null }) {
   const pn = v.pathNecessity;
   const branched = isBranched(path ?? '');
@@ -142,9 +193,11 @@ function ItemCard({ build, rec, baseline, decision, onDecided }) {
         <p className="focus">{rec.plan.focus}</p>
         <div className="verdicts">
           {v ? <span className={`tag ${v.summary.pass ? 'ok' : 'warn'}`} title="checks passed of those that apply">{v.summary.passed}/{v.summary.applicable} checks</span> : <span className="tag bad">{rec.status}</span>}
-          {nec ? <span className={`tag ${nec.pass ? 'ok' : 'warn'}`} title={nec.verdict}>{nec.pass ? 'needs the full path' : nec.determinedAt == null ? 'key never reached' : isBranched(rec.plan.path) ? 'answerable without a step' : `answerable after step ${nec.determinedAt}`}</span> : null}
+          {nec ? <span className={`tag ${nec.pass ? 'ok' : 'warn'}`} title={nec.verdict}>{nec.pass ? 'needs the full path' : nec.determinedAt == null && v.format !== 'short' ? 'key never reached' : isBranched(rec.plan.path) || v.format === 'short' ? 'answerable without a step' : `answerable after step ${nec.determinedAt}`}</span> : null}
           {v?.digestRecall && !v.digestRecall.skipped ? <span className={`tag ${v.digestRecall.pass ? 'ok' : 'bad'}`}>{v.digestRecall.pass ? 'not in the article as stated' : 'stated by the article'}</span> : null}
           {v?.distractorMapping ? <span className={`tag ${v.distractorMapping.pass ? 'ok' : 'warn'}`}>key blocked {v.distractorMapping.keyBlocked}/{v.distractorMapping.total}</span> : null}
+          {v?.elementMapping ? <span className={`tag ${v.elementMapping.pass ? 'ok' : 'warn'}`}>final element blocked {v.elementMapping.terminalBlocked}/{v.elementMapping.total}</span> : null}
+          {item?.format === 'short' ? <span className="tag" title="one scored element per path node">short answer, {item.maxPoints} points</span> : null}
         </div>
       </header>
       <nav className="tabs">{tabs.map(([k, label]) => <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}</nav>
@@ -154,16 +207,17 @@ function ItemCard({ build, rec, baseline, decision, onDecided }) {
           {cc ? <div className="constraint"><span className="lead">The case</span> <span className="exam">{cc.feature}</span></div> : null}
           <p className="stem exam">{item.stem}</p>
           <p className="leadin exam">{item.leadIn}</p>
+          {item.format === 'short' ? <ShortKey item={item} path={rec.plan.path} /> : <>
           <Options item={item} path={rec.plan.path} />
           <details className="explain"><summary>Explanation and distractor rationale</summary>
             <ol className="bystep">{item.explanation?.map((e) => <li key={e.step}><StepDot step={e.step} path={rec.plan.path} /> <span>{e.reasoning}</span></li>)}</ol>
             <ul className="rationale">{item.options.filter((o) => !o.isKey).map((o) => <li key={o.id}><span className="letter">{o.id}</span><span>{o.failureRationale}</span></li>)}</ul>
-          </details>
+          </details></>}
           {rec.status === 'done' ? <Review build={build} rec={rec} decision={decision} onDecided={onDecided} /> : null}
         </div>
       ) : null}
       {item && tab === 'made' ? <div className="tabbody"><Walkthrough trace={t} /></div> : null}
-      {item && v && tab === 'verification' ? <div className="tabbody"><Checks v={v} item={item} path={rec.plan.path} /></div> : null}
+      {item && v && tab === 'verification' ? <div className="tabbody">{v.format === 'short' ? <ShortChecks v={v} item={item} path={rec.plan.path} /> : <Checks v={v} item={item} path={rec.plan.path} />}</div> : null}
       {baseline && tab === 'single-shot' ? (
         <div className="tabbody">
           {!bitem ? <p className="error">{baseline.error?.message ?? 'not built'}</p> : (
@@ -171,8 +225,18 @@ function ItemCard({ build, rec, baseline, decision, onDecided }) {
               <p className="muted">One call, same focus and digest, asked for an item that requires recall, analysis, evaluation and synthesis. No path, no artifacts, no step checks.</p>
               <p className="stem exam">{bitem.stem}</p>
               <p className="leadin exam">{bitem.leadIn}</p>
-              <Options item={bitem} />
-              {bv ? (
+              {bitem.format === 'short' ? <ShortKey item={bitem} /> : <Options item={bitem} />}
+              {bv && bv.format === 'short' ? (
+                <div className="checks">
+                  <div className="check"><div className="check-q">Are the quoted facts really in the article?</div><Verdict ok={bv.grounding.skipped ? null : bv.grounding.pass} /><span className="check-a">{bv.grounding.skipped ? bv.grounding.reason : `${bv.grounding.found} of ${bv.grounding.checked} evidence quotes found.`}</span></div>
+                  <div className="check"><div className="check-q">Can an expert with the article earn every element?</div><Verdict ok={bv.answerability.pass}>{bv.answerability.score} of {bv.answerability.max}</Verdict></div>
+                  <div className="check"><div className="check-q">Does the model answer earn every element?</div><Verdict ok={bv.modelAnswerScore.pass}>{bv.modelAnswerScore.score} of {bv.modelAnswerScore.max}</Verdict></div>
+                  <ShortRecallCheck question="Could the model answer be found in the article's claims alone?" r={bv.digestRecall} passMeans="" />
+                  <ShortRecallCheck question="Could the model answer be found in the article's recommendations alone?" r={bv.sourceRecall} passMeans="" />
+                  <div className="check"><div className="check-q">Is the item well formed?</div><Verdict ok={bv.form.pass} /><span className="check-a">{bv.form.problems.join('; ') || 'one question, a model answer within limits'}</span></div>
+                  <div className="check"><div className="check-q">Path necessity and element mapping</div><Verdict ok={null} /><span className="muted">cannot be measured: there are no step artifacts</span></div>
+                </div>
+              ) : bv ? (
                 <div className="checks">
                   <div className="check"><div className="check-q">Are the quoted facts really in the article?</div><Verdict ok={bv.grounding.skipped ? null : bv.grounding.pass} /><span className="check-a">{bv.grounding.skipped ? bv.grounding.reason : `${bv.grounding.found} of ${bv.grounding.checked} evidence quotes found.`}</span></div>
                   <div className="check"><div className="check-q">Does an expert answering from the article land on the key?</div><Verdict ok={bv.coverTheOptions.pass} /><span className="check-a">mapped to {bv.coverTheOptions.mappedTo} ({bv.coverTheOptions.match})</span></div>
@@ -197,10 +261,10 @@ const EVENT_LINE = {
   'step:start': (e) => `  ${e.step} (${e.op}, effort ${e.effort})`,
   'step:retry': (e) => `    sent back: ${(e.problems ?? []).join('; ')}`,
   'step:done': (e) => `    done in ${e.ms} ms, ${e.usage?.input_tokens ?? 0} in / ${e.usage?.output_tokens ?? 0} out${e.problems?.length ? `; problems: ${e.problems.join('; ')}` : ''}`,
-  'verify:sourceRecall': (e) => `    recommendations alone: ${e.skipped ? 'n/a' : e.choice}${e.lean && e.choice === 'UNDETERMINED' ? ` (leans ${e.lean})` : ''}`,
-  'verify:digestRecall': (e) => `    claims alone: ${e.skipped ? 'n/a' : e.choice}${e.lean && e.choice === 'UNDETERMINED' ? ` (leans ${e.lean})` : ''}`,
-  'verify:necessity': (e) => `    with steps 1–${e.k}: ${e.choice}${e.override ? ` (overridden: ${e.override})` : ''}`,
-  'verify:mapping': (e) => `    ${e.step} corrupted: ${e.picked}, key ${e.keyBlocked ? 'blocked' : 'reached'}${e.landed ? ', landed' : ''}`,
+  'verify:sourceRecall': (e) => `    recommendations alone: ${e.skipped ? 'n/a' : (e.choice ?? (e.entailed ? 'answer entailed' : 'answer not entailed'))}${e.lean && e.choice === 'UNDETERMINED' ? ` (leans ${e.lean})` : ''}`,
+  'verify:digestRecall': (e) => `    claims alone: ${e.skipped ? 'n/a' : (e.choice ?? (e.entailed ? 'answer entailed' : 'answer not entailed'))}${e.lean && e.choice === 'UNDETERMINED' ? ` (leans ${e.lean})` : ''}`,
+  'verify:necessity': (e) => `    ${e.without ? `without ${e.without}` : 'with every step'}: ${e.choice ?? `elements established ${(e.entailed ?? []).join(' ') || 'none'}`}${e.override ? ` (overridden: ${e.override})` : ''}`,
+  'verify:mapping': (e) => (e.terminalBlocked != null && e.picked == null ? `    ${e.step} corrupted: elements established ${(e.entailed ?? []).join(' ') || 'none'}, final element ${e.terminalBlocked ? 'blocked' : 'reached'}` : `    ${e.step} corrupted: ${e.picked}, key ${e.keyBlocked ? 'blocked' : 'reached'}${e.landed ? ', landed' : ''}`),
   'item:done': (e) => `  ${e.item} ${e.status}${e.pass ? `, checks ${e.pass}` : ''}${e.necessity != null ? `, needs steps 1–${e.necessity}` : ''}${e.digestRecall != null ? `, claims alone: ${e.digestRecall ? 'no' : 'yes'}` : ''}`,
   'baseline:start': (e) => `  single-shot control for ${e.item}`,
   'baseline:done': (e) => `  control ${e.item} ${e.status}${e.pass ? `, checks ${e.pass}` : ''}${e.error ? `, ${e.error}` : ''}`,
@@ -213,7 +277,7 @@ function PendingBuild({ b, events, onBack }) {
     <div className="page wide">
       <button type="button" className="link back" onClick={onBack}>Builds</button>
       <h1>{b.source?.title ?? b.id}</h1>
-      <p className="meta">{b.n} items, {b.pathMode === 'composed' ? `${b.paths?.length ?? 1} composed path${(b.paths?.length ?? 1) > 1 ? 's' : ''}` : 'planner-designed paths'}, {b.model}{b.by ? `, started by ${b.by}` : ''}{b.createdAt ? ` on ${new Date(b.createdAt).toLocaleString()}` : ''}</p>
+      <p className="meta">{b.n} {b.format === 'short' ? 'short-answer ' : ''}items, {b.pathMode === 'composed' ? `${b.paths?.length ?? 1} composed path${(b.paths?.length ?? 1) > 1 ? 's' : ''}` : 'planner-designed paths'}, {b.model}{b.by ? `, started by ${b.by}` : ''}{b.createdAt ? ` on ${new Date(b.createdAt).toLocaleString()}` : ''}</p>
       <div className={`progress ${b.status}`}>
         <span className={`tag ${b.status === 'failed' ? 'bad' : 'warn'}`}>{b.status}{live ? '…' : ''}</span>
         {live ? <span>{p.phase === 'queued' ? 'Waiting for a worker to start' : p.phase === 'plan' ? 'Planning the items' : `${p.itemsDone ?? 0} of ${p.of ?? b.n} items done${p.item ? `, working on ${p.item}` : ''}${p.step ? ` (${p.step})` : ''}${p.phase === 'control' ? ', single-shot control' : ''}`}</span> : null}
@@ -256,7 +320,7 @@ export default function BuildView({ id, onBack }) {
     <div className="page wide">
       <button type="button" className="link back" onClick={onBack}>Builds</button>
       <h1>{b.source.title}</h1>
-      <p className="meta">{b.n} items with {b.baselines?.length ? 'single-shot controls' : 'no controls'}, {b.pathMode === 'composed' ? `${b.paths?.length ?? 1} composed path${(b.paths?.length ?? 1) > 1 ? 's' : ''}` : 'paths designed by the planner'}, {b.model}. Built {new Date(b.createdAt).toLocaleString()}{b.by ? ` by ${b.by}` : ''} from digest {b.source.sha?.slice(0, 12)} ({b.source.claims} claims, {b.source.digestReview}). {b.totals.calls} generation calls, {b.totals.input_tokens.toLocaleString()} tokens in ({b.totals.cached_tokens.toLocaleString()} cached), {b.totals.output_tokens.toLocaleString()} out, {Math.round(b.totals.ms / 60000)} minutes.{b.rescored?.length ? ` Re-scored ${new Date(b.rescored[b.rescored.length - 1].at).toLocaleDateString()} under current rules (${b.rescored.reduce((n, r) => n + r.changes.length, 0)} picks changed).` : ''}</p>
+      <p className="meta">{b.n} {b.format === 'short' ? 'short-answer ' : ''}items with {b.baselines?.length ? 'single-shot controls' : 'no controls'}, {b.pathMode === 'composed' ? `${b.paths?.length ?? 1} composed path${(b.paths?.length ?? 1) > 1 ? 's' : ''}` : 'paths designed by the planner'}, {b.model}. Built {new Date(b.createdAt).toLocaleString()}{b.by ? ` by ${b.by}` : ''} from digest {b.source.sha?.slice(0, 12)} ({b.source.claims} claims, {b.source.digestReview}). {b.totals.calls} generation calls, {b.totals.input_tokens.toLocaleString()} tokens in ({b.totals.cached_tokens.toLocaleString()} cached), {b.totals.output_tokens.toLocaleString()} out, {Math.round(b.totals.ms / 60000)} minutes.{b.rescored?.length ? ` Re-scored ${new Date(b.rescored[b.rescored.length - 1].at).toLocaleDateString()} under current rules (${b.rescored.reduce((n, r) => n + r.changes.length, 0)} picks changed).` : ''}</p>
       {b.pathMode === 'composed' && b.paths?.length ? <div className="pathrow">{b.paths.map((p, i) => <span key={i}><PathGlyph path={p} /></span>)}</div> : null}
 
       <div className="scorecard">

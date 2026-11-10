@@ -1,6 +1,6 @@
 # cogpath
 
-Compile assessment items from a **cognitive path**. Instead of asking a model to "write a hard question", cogpath makes the model *execute* the reasoning a learner must perform (recall > analyze > evaluate > synthesize) over a source, one typed artifact per step, then assembles a single-best-answer item whose key is the terminal artifact and whose distractors are **failures at specific steps**. It then verifies that the full path is actually necessary to reach the key.
+Compile assessment items from a **cognitive path**. Instead of asking a model to "write a hard question", cogpath makes the model *execute* the reasoning a learner must perform (recall > analyze > evaluate > synthesize) over a source, one typed artifact per step, then assembles either a single-best-answer item (the default: the key is the terminal artifact and the distractors are **failures at specific steps**) or, with `--format short`, a **short-answer item** whose rubric has one scored element per step. It then verifies that the full path is actually necessary: that no step can be taken away and still leave the answer reachable.
 
 Built on the Claude API (default model `claude-sonnet-5-5`): structured outputs with constrained decoding, per-step effort, native PDF input, prompt caching. It started on the Meta Model API (Muse Spark 1.3) for the Meta hackathon; the write-up from then is `docs/SUBMISSION.md`. Live at https://cogpath.org (also https://edai-prep-25580.web.app).
 
@@ -17,6 +17,7 @@ cp .env.example .env            # add MODEL_API_KEY
 node cli.js ops                 # list cognitive operations and their params
 node cli.js run samples/retrobulbar-hematoma.md "recall(3) > analyze(causal) > evaluate(efficacy, safety) > synthesize(management plan)"
 node cli.js run article.pdf "recall > analyze(contrast) > evaluate(benefit, risk, cost) > synthesize(recommendation)" --deep
+node cli.js run article.pdf "r1: recall(2) > a: analyze(causal); r2: recall(2); @a, @r2 > evaluate(efficacy, safety) > synthesize(plan)" --format short --deep   # a branched path, a rubric item
 node cli.js run article.pdf "…" --deep --inline-text   # send the extracted text instead of the PDF (no page images, fewer input tokens)
 node cli.js probe-cache article.pdf [--inline-text]     # five cheap calls that show whether prompt caching engages, and whether a new schema breaks it
 ```
@@ -63,6 +64,26 @@ Verification follows the graph. Path necessity asks, for each step, whether the 
 `assemble` always runs last. Distractor policy **one-per-step**: one distractor tagged `failsAt=<step>` per path step, padded with extra terminal-step distractors so every item has at least 4 options. Letters are assigned by a seeded shuffle (`--seed`).
 
 The stem is a vignette, not a literature summary: one specific case as a learner would meet it, embedding the synthesize step's case constraint as a concrete finding (copied into `constraintSpan`, checked verbatim against the stem). It states none of the recalled facts or figures; the assembler rejects a stem that restates a recall concept or carries its numbers (`4-fold`, `12,172`, `39%`). The learner must bring the facts, see the constraint, and adapt the principles; a learner who only knows the generic recommendation lands on the synthesize-tagged distractor. Options must be homogeneous (same form, at most 3 clauses, lengths within 25%); a key that is the longest by more than 20% is rejected as a length cue.
+
+## Short answer
+
+`--format short` (build form: *Answer format*; API: `format`) assembles a short written-response item instead of options. The default stays `mcq`.
+
+- **Item**: a vignette stem, a lead-in that is one question asking for the decision and the reasoning behind it, a **model answer** (the terminal artifact written as a 15 to 110 word answer), and an analytic **rubric with exactly one scored element per path node**. An element is `{ nodeId, requirement, derivedFrom, commonError, points }`: what an answer must show to earn credit at that node, the recalled fact, relation or strategy it comes from, and what an answer that misses it typically says. A learner who fails at a node loses exactly that element; this is the short-answer counterpart of the distractor tagged `failsAt`.
+- **Why it follows the graph**: a multiple-choice item needs a distractor per step, so a path is capped at five steps and a branch has no natural place. A rubric element is per node, so any path, of any shape and length, is scored line by line.
+- **Stem rules** are the same as for multiple choice (the case constraint is carried verbatim; the stem states no recalled fact or figure and not the consequence of the constraint). The assembler also rejects a rubric that is out of path order, an element derived from material outside its node, a requirement that restates the stem, and a model answer the source's own claims already entail.
+- **Grading real candidates** is out of scope here. The grader that scores the expert's answer and the model answer during verification is a verification tool, not a candidate scorer.
+
+| check (short) | what it does | calls |
+|---|---|---|
+| grounding | as above | 0 |
+| answerability | an expert with the source and no rubric writes an answer; a grader scores it against the rubric, quoting the answer for every element it credits (a credit with no quote in the answer is not given). Every element must be met. Replaces cover-the-options | 2 |
+| modelAnswerScore | the same grader scores the model answer; it must earn every element, so the rubric is satisfiable by the key | 1 |
+| sourceRecall / digestRecall | the model answer must NOT be fully entailed by the source's recommendations alone, nor by all its claims | 2 |
+| pathNecessity | for each node, the notes of every node except it and its dependents (no source, no outside knowledge): that node's element and the final element must NOT be established; with all notes, every element must be. Entailment is judged by the same local discipline as the multiple-choice picker (quotes must exist in the cited note and bear on the point) | n+1 |
+| elementMapping (`--deep`) | corrupt a node, re-run the nodes that depend on it, ask which elements the notes now establish; the final element must NOT be | 2n |
+
+The single-shot control writes a short-answer item on the same focus (stem, lead-in, model answer, a 3 to 6 element rubric with no node tags) and is run through the checks both arms share: grounding, answerability, modelAnswerScore, source recall, form. Stored picks are re-judged by `rescoreBuild` like multiple-choice picks. Export (`exportItem`) carries `format`, `modelAnswer`, and `rubric` with the node each element scores, and `options: null`.
 
 ## Verification
 
@@ -196,7 +217,8 @@ Candidates: `apply(scenario)`, `critique`, `predict`, `compare(sourceB)`.
 ## Layout
 
 ```
-core/ops/         recall, analyze, evaluate, synthesize, assemble (+ registry)
+core/ops/         recall, analyze, evaluate, synthesize, assemble (multiple choice), assemble-short (rubric) (+ registry)
+core/verify-short.js  the checks for a rubric item
 core/path.js      DSL parser / normalizer (chains and branches)
 core/graph.js     dependencies, ancestors, descendants of a path
 core/schema.js    strict-schema helpers, validator, Claude request form (toClaudeSchema)
@@ -255,7 +277,7 @@ Development history on the fat grafting survey, same verifier rules applied retr
 
 ## Roadmap
 
-1. DAG paths (two recalls feeding one analysis) with branch-ablation necessity, step-qualified ids and an option budget; `compare(sourceB)`, `apply`, `critique` as new ops the composer picks up from the registry.
+1. `compare(sourceB)`, `apply`, `critique` as new ops the composer picks up from the registry; a path planner that proposes branched paths (it designs linear ones today).
 2. Streamed reasoning summaries per step for the live trace.
 3. Export formats beyond JSON (QTI, CSV) and a per-board item template.
 

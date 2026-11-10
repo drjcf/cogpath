@@ -10,8 +10,8 @@
  *   cogpath unapprove <source|sha> [--note "…"]                                         back to draft
  *   cogpath sources                                                                    list ingested sources
  *   cogpath digest <source|sha> [--json] [--review]                                    print the digest as the steps see it; --review: each claim with its page and passage
- *   cogpath run <source.pdf|.md|.txt|sha> "<path>" [--source auto|digest|both|raw] [--model claude-sonnet-5-5] [--effort high] [--deep] [--no-verify] [--out runs] [--seed 7] [--json] [--inline-text]
- *   cogpath build <source|sha> --items N [--path "…"] [--deep] [--baseline] [--seed n] [--model]   N distinct items from one approved digest (+ single-shot controls)
+ *   cogpath run <source.pdf|.md|.txt|sha> "<path>" [--source auto|digest|both|raw] [--model claude-sonnet-5-5] [--effort high] [--deep] [--no-verify] [--out runs] [--seed 7] [--format mcq|short] [--json] [--inline-text]
+ *   cogpath build <source|sha> --items N [--path "…"] [--deep] [--baseline] [--seed n] [--format mcq|short] [--model]   N distinct items from one approved digest (+ single-shot controls)
  *   cogpath show <runs/run-….json>
  *   cogpath rescore <build-id|runs/builds/….json|all> [--write]   re-judge a build's stored picks under the current local rules (no model calls); --write updates the record
  *   cogpath probe-cache <source> [--inline-text]     five cheap calls that show whether prefix caching engages, and where
@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as cryptoSync from 'node:crypto';
 import { parsePath, formatPath, PathError } from './core/path.js';
-import { describeOps, OPS, schemaOf } from './core/ops/index.js';
+import { describeOps, OPS, schemaOf, FORMATS } from './core/ops/index.js';
 import { loadSource, withDigest, sourceFromStore } from './core/source.js';
 import { runPath, artifactsBlock, PREAMBLE } from './core/executor.js';
 import { verifyItem } from './core/verifier.js';
@@ -145,6 +145,8 @@ async function run() {
   if (flag('out', undefined)) process.env.COGPATH_DATA = String(flag('out'));
   const seed = flag('seed', undefined);
   const deep = has('deep');
+  const format = flag('format', 'mcq');
+  if (!FORMATS.includes(format)) die(`--format must be one of ${FORMATS.join(' | ')}`);
   const verify = !has('no-verify');
   const json = has('json');
 
@@ -159,13 +161,14 @@ async function run() {
     if (e.type === 'step:start') log(`  → ${e.step} (${e.op}, effort ${e.effort})`);
     if (e.type === 'step:retry') log(`    retry: ${e.problems.join('; ')}`);
     if (e.type === 'step:done') log(`    ✓ ${e.step} ${e.ms} ms · ${e.usage?.input_tokens ?? 0} in (${e.usage?.cached_tokens ?? 0} cached) / ${e.usage?.output_tokens ?? 0} out (${e.usage?.reasoning_tokens ?? 0} reasoning)${e.problems?.length ? ` · PROBLEMS: ${e.problems.join('; ')}` : ''}`);
-    if (e.type === 'verify:sourceRecall' && !e.skipped) log(`    source recall: ${e.choice}${e.choice === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''} from ${e.claims.length} recommendation claims${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
-    if (e.type === 'verify:digestRecall' && !e.skipped) log(`    digest recall: ${e.choice}${e.choice === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''} from all ${e.claims} claims${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
-    if (e.type === 'verify:necessity') log(`    necessity k=${e.k}: ${e.choice}  entailed=[${e.entailed.join(',')}]${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
-    if (e.type === 'verify:mapping') log(`    mapping ${e.step}: picked ${e.picked}${e.picked === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''}${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''} · key blocked ${e.keyBlocked ? '✓' : '✗'} · landed on tagged distractor (${e.expected.join('/')}) ${e.landed ? '✓' : '✗'}`);
+    if (e.type === 'verify:sourceRecall' && !e.skipped) log(`    source recall: ${e.choice ?? (e.entailed ? 'ENTAILED' : 'not entailed')}${e.choice === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''} from ${(e.claims ?? []).length} recommendation claims${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
+    if (e.type === 'verify:digestRecall' && !e.skipped) log(`    digest recall: ${e.choice ?? (e.entailed ? 'ENTAILED' : 'not entailed')}${e.choice === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''} from all ${e.claims} claims${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
+    if (e.type === 'verify:necessity') log(`    necessity ${e.without ? `without ${e.without}` : 'with every step'} (${e.k} steps' notes): ${e.choice !== undefined ? e.choice : `elements established [${(e.entailed ?? []).join(',')}]`}${e.choice !== undefined ? `  entailed=[${(e.entailed ?? []).join(',')}]` : ''}${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''}`);
+    if (e.type === 'verify:mapping' && e.expected === undefined) log(`    mapping ${e.step}: elements established [${(e.entailed ?? []).join(',')}] · final element blocked ${e.terminalBlocked ? '✓' : '✗'}`);
+    if (e.type === 'verify:mapping' && e.expected !== undefined) log(`    mapping ${e.step}: picked ${e.picked}${e.picked === 'UNDETERMINED' && e.lean ? ` (leans ${e.lean})` : ''}${e.override ? ` (raw ${e.raw} overridden: ${e.override})` : ''} · key blocked ${e.keyBlocked ? '✓' : '✗'} · landed on tagged distractor (${e.expected.join('/')}) ${e.landed ? '✓' : '✗'}`);
   };
 
-  const trace = await runPath({ source, path: steps, model, effort, onEvent, seed: seed ? Number(seed) : undefined });
+  const trace = await runPath({ source, path: steps, model, effort, onEvent, seed: seed ? Number(seed) : undefined, format });
   if (trace.status === 'failed') {
     const file = await saveRun(trace, { partial: true });
     console.error(`\n[cogpath] FAILED after ${trace.steps.length}/${steps.length} steps: ${trace.error.message}`);
@@ -217,6 +220,8 @@ async function build() {
   if (flag('out', undefined)) process.env.COGPATH_DATA = String(flag('out'));
   const seed = flag('seed', undefined);
   const deep = has('deep');
+  const format = flag('format', 'mcq');
+  if (!FORMATS.includes(format)) die(`--format must be one of ${FORMATS.join(' | ')}`);
   const baseline = has('baseline');
   const json = has('json');
   const log = (...m) => { if (!json) console.error(...m); };
@@ -233,7 +238,7 @@ async function build() {
     if (e.type === 'item:done') log(`  ${e.status === 'done' ? `verification ${e.verification?.summary.passed}/${e.verification?.summary.applicable} ${e.verification?.summary.pass ? 'PASS' : 'FAIL'}` : `FAILED: ${e.trace?.error?.message ?? e.status}`}`);
     if (e.type === 'baseline:done') log(`  baseline: ${e.verification ? `${e.verification.summary.passed}/${e.verification.summary.applicable} ${e.verification.summary.pass ? 'PASS' : 'FAIL'} (sourceRecall ${e.verification.sourceRecall.skipped ? 'n/a' : e.verification.sourceRecall.pass ? 'pass' : 'FAIL'}, form ${e.verification.form.pass ? 'pass' : 'FAIL'})` : `failed: ${e.error}`}`);
   };
-  const { result, where: file } = await buildFlow({ source, n, pathHint, model, deep, baseline, seed: seed ? Number(seed) : undefined, by: process.env.USER ?? null, onEvent });
+  const { result, where: file } = await buildFlow({ source, n, pathHint, model, deep, baseline, seed: seed ? Number(seed) : undefined, by: process.env.USER ?? null, onEvent, format });
   if (json) { console.log(JSON.stringify(result, null, 2)); return; }
   if (result.status === 'failed' && !result.items.length) { console.error(`\n[cogpath] build FAILED before any item was built: ${result.error.message}\n[cogpath] record saved to ${file}`); process.exit(2); }
   printBuild(result);
@@ -255,7 +260,7 @@ function printBuild(result) {
     for (const x of it) {
       const item = x.trace.item;
       console.log(`\n[${x.plan.id}] ${wrap(item.stem)}\n${item.leadIn}`);
-      for (const o of item.options) console.log(`  ${o.id}. ${o.text}${o.isKey ? '   [KEY]' : `   [fails at ${o.failsAt}]`}`);
+      printAnswerKey(item);
     }
   }
   console.log(`\nRates (path items): necessity ${s.rates.necessity} · digestRecall ${s.rates.digestRecall} · sourceRecall ${s.rates.sourceRecall} · all checks ${s.rates.allChecks}${s.rates.baselineForm ? `\nRates (single-shot): digestRecall ${s.rates.baselineDigestRecall} · sourceRecall ${s.rates.baselineSourceRecall} · cover ${s.rates.baselineCover} · form ${s.rates.baselineForm} (necessity and distractor mapping need step artifacts; digestRecall is the check both arms share)` : ''}`);
@@ -422,14 +427,11 @@ function printTrace(trace) {
   console.log(`\n${wrap(item.stem)}\n\n${item.leadIn}\n`);
   const cc = trace.path.map((s) => trace.artifacts[s.id]?.caseConstraint).filter(Boolean).pop();
   if (cc) console.log(`  [case constraint: ${cc.feature} (${cc.whyGenericInsufficient}; from ${cc.derivedFrom.join(', ')})${item.constraintSpan ? ` · in stem: "${item.constraintSpan}"` : ''}]\n`);
-  for (const o of item.options) console.log(`  ${o.id}. ${o.text}${o.isKey ? '   [KEY]' : `   [fails at ${o.failsAt}]`}`);
-  console.log('\nExplanation by step:');
-  for (const e of item.explanation) console.log(`  ${e.step}: ${e.reasoning}`);
-  console.log('\nDistractor rationale:');
-  for (const o of item.options.filter((x) => !x.isKey)) console.log(`  ${o.id} (${o.failsAt}): ${o.failureRationale}`);
+  printAnswerKey(item, { detail: true });
 
   const v = trace.verification;
-  if (v) {
+  if (v && v.format === 'short') printShortVerification(v);
+  else if (v) {
     console.log(`\nVerification: ${v.summary.passed}/${v.summary.applicable} ${v.summary.pass ? 'PASS' : 'FAIL'}`);
     if (!v.grounding.skipped) console.log(`  grounding        ${v.grounding.pass ? '✓' : '✗'} ${v.grounding.found}/${v.grounding.checked} spans found${v.grounding.missing.length ? ' · missing: ' + v.grounding.missing.map((m) => `${m.id}`).join(', ') : ''}`);
     console.log(`  coverTheOptions  ${v.coverTheOptions.pass ? '✓' : '✗'} free answer mapped to ${v.coverTheOptions.mappedTo} (${v.coverTheOptions.match}); key ${v.coverTheOptions.key}`);
@@ -438,6 +440,34 @@ function printTrace(trace) {
     console.log(`  pathNecessity    ${v.pathNecessity.pass ? '✓' : '✗'} picks by notes depth: ${v.pathNecessity.picks.map((p) => `k${p.k}=${p.choice}${p.override ? `(raw ${p.raw})` : ''}`).join(' ')} → ${v.pathNecessity.verdict}${v.pathNecessity.leaksContained ? ` · ${v.pathNecessity.leaksContained} outside-knowledge pick(s) contained` : ''}`);
     if (v.distractorMapping) console.log(`  distractorMapping ${v.distractorMapping.pass ? '✓' : '✗'} key blocked ${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}, landed ${v.distractorMapping.landed}/${v.distractorMapping.total}: ${v.distractorMapping.perStep.map((p) => `${p.step}→${p.picked}${p.picked === 'UNDETERMINED' && p.lean ? '~' + p.lean : ''}${p.landed ? '' : '(exp ' + p.expected.join('/') + ')'}`).join(' ')}`);
   }
+}
+
+/** The answer side of an item: lettered options for a multiple-choice item, the model answer and the rubric for a short-answer one. */
+function printAnswerKey(item, { detail = false } = {}) {
+  if (item.format === 'short') {
+    console.log(`  model answer: ${item.modelAnswer}`);
+    console.log(`  rubric (${item.maxPoints} points, one element per node):`);
+    for (const e of item.rubric) console.log(`    ${e.id} [${e.nodeId}] ${e.requirement}${detail ? `\n         a miss: ${e.commonError}` : ''}`);
+    return;
+  }
+  for (const o of item.options) console.log(`  ${o.id}. ${o.text}${o.isKey ? '   [KEY]' : `   [fails at ${o.failsAt}]`}`);
+  if (!detail) return;
+  console.log('\nExplanation by step:');
+  for (const e of item.explanation) console.log(`  ${e.step}: ${e.reasoning}`);
+  console.log('\nDistractor rationale:');
+  for (const o of item.options.filter((x) => !x.isKey)) console.log(`  ${o.id} (${o.failsAt}): ${o.failureRationale}`);
+}
+
+function printShortVerification(v) {
+  const mark = (ok) => (ok ? '✓' : '✗');
+  console.log(`\nVerification: ${v.summary.passed}/${v.summary.applicable} ${v.summary.pass ? 'PASS' : 'FAIL'}`);
+  if (!v.grounding.skipped) console.log(`  grounding        ${mark(v.grounding.pass)} ${v.grounding.found}/${v.grounding.checked} spans found${v.grounding.missing.length ? ' · missing: ' + v.grounding.missing.map((m) => `${m.id}`).join(', ') : ''}`);
+  console.log(`  answerability    ${mark(v.answerability.pass)} an expert with the source met ${v.answerability.score}/${v.answerability.max} elements${v.answerability.pass ? '' : ' · not met: ' + v.answerability.marks.filter((m) => !m.met).map((m) => `${m.elementId} (${m.nodeId})`).join(', ')}`);
+  console.log(`  modelAnswerScore ${mark(v.modelAnswerScore.pass)} the model answer earns ${v.modelAnswerScore.score}/${v.modelAnswerScore.max}`);
+  if (v.sourceRecall && !v.sourceRecall.skipped) console.log(`  sourceRecall     ${mark(v.sourceRecall.pass)} ${v.sourceRecall.verdict}`);
+  if (v.digestRecall && !v.digestRecall.skipped) console.log(`  digestRecall     ${mark(v.digestRecall.pass)} ${v.digestRecall.verdict}`);
+  console.log(`  pathNecessity    ${mark(v.pathNecessity.pass)} elements established by notes: ${v.pathNecessity.picks.map((p) => `${p.without ? `w/o ${p.without}` : 'all'}=${p.entailed.join('+') || 'none'}`).join(' ')} → ${v.pathNecessity.verdict}`);
+  if (v.elementMapping) console.log(`  elementMapping   ${mark(v.elementMapping.pass)} final element blocked ${v.elementMapping.terminalBlocked}/${v.elementMapping.total}, own element broken ${v.elementMapping.ownBroken}/${v.elementMapping.total}`);
 }
 
 function wrap(s, w = 100) { return String(s).replace(new RegExp(`(.{1,${w}})(\\s+|$)`, 'g'), '$1\n').trimEnd(); }

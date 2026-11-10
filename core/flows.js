@@ -41,7 +41,7 @@ export async function ingestFlow({ source, model, maxClaims, audit = true, log =
  * Build N items (and controls) and store the record. `onEvent` receives the build events; the summary in the
  * store is patched as items finish so a console can follow a build that is still running.
  */
-export async function buildFlow({ source, n, paths, pathHint, model, deep, baseline, seed, id, by, jobId, onEvent }) {
+export async function buildFlow({ source, n, paths, pathHint, model, deep, baseline, seed, id, by, jobId, onEvent, format }) {
   if (!paths?.length && pathHint) paths = [pathHint];
   let itemsDone = 0;
   let currentItem = null;
@@ -52,12 +52,12 @@ export async function buildFlow({ source, n, paths, pathHint, model, deep, basel
     if (e.type === 'plan:done') await progress({ status: 'running', phase: 'items', plan: e.plans.map((p) => ({ id: p.id, focus: p.focus, path: p.pathText, claims: p.claims })), progress: { phase: 'items', itemsDone: 0, of: n, at: new Date().toISOString() } });
     if (e.type === 'item:start') { currentItem = e.plan.id; await progress({ progress: { phase: 'item', item: e.plan.id, index: e.index, itemsDone, of: n, step: null, at: new Date().toISOString() } }); }
     if (e.type === 'step:start') await progress({ progress: { phase: 'step', item: currentItem, step: e.step, itemsDone, of: n, at: new Date().toISOString() } });
-    if (e.type === 'verify:necessity' || e.type === 'verify:mapping') await progress({ progress: { phase: 'verify', item: currentItem, step: e.type === 'verify:necessity' ? `necessity k${e.k}` : `mapping ${e.step}`, itemsDone, of: n, at: new Date().toISOString() } });
+    if (e.type === 'verify:necessity' || e.type === 'verify:mapping') await progress({ progress: { phase: 'verify', item: currentItem, step: e.type === 'verify:necessity' ? `necessity ${e.without ? `without ${e.without}` : 'with every step'}` : `mapping ${e.step}`, itemsDone, of: n, at: new Date().toISOString() } });
     if (e.type === 'item:done') { itemsDone++; await progress({ progress: { phase: 'item-done', item: e.plan.id, itemsDone, of: n, pass: e.verification ? `${e.verification.summary.passed}/${e.verification.summary.applicable}` : e.status, at: new Date().toISOString() } }); }
     if (e.type === 'baseline:start') await progress({ progress: { phase: 'control', item: e.plan.id, itemsDone, of: n, at: new Date().toISOString() } });
   };
   if (id) await progress({ id, status: 'running', phase: 'plan', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, claims: source.digest?.claims?.length ?? 0, mode: source.mode, digestReview: source.digestReview ?? null }, n, deep, pathHint: paths?.[0] ?? null, paths: paths ?? null, pathMode: paths?.length ? 'composed' : 'planner', by: by ?? null, jobId: jobId ?? null, progress: { phase: 'plan', itemsDone: 0, of: n, at: new Date().toISOString() } });
-  const result = await buildItems({ source, n, paths, model, deep, baseline, seed, id, onEvent: wrapped });
+  const result = await buildItems({ source, n, paths, model, deep, baseline, seed, id, onEvent: wrapped, format });
   result.by = by ?? null; result.jobId = jobId ?? null; result.finishedAt = new Date().toISOString();
   const saved = await saveBuild(result, summarize);
   return { result, ...saved };

@@ -12,6 +12,8 @@ import { PRESETS } from '../core/presets.js';
 import { ATTRIBUTIONS, CLAIM_TYPES, SECTIONS, reviewPassage } from '../core/ingest.js';
 import { summarize } from '../core/build.js';
 import { parsePath, formatPath, isLinear } from '../core/path.js';
+import { FORMATS, DEFAULT_FORMAT } from '../core/ops/index.js';
+import { MAX_MCQ_STEPS } from '../core/executor.js';
 import { newId } from '../core/executor.js';
 import { DEFAULT_MODEL, isMock } from '../core/llm.js';
 import { identify, requireWriter, authMode } from './auth.js';
@@ -68,7 +70,8 @@ export function apiRouter() {
   r.get('/ops', (_req, res) => { res.json({ ops: describeOps(), presets: PRESETS }); });
   r.post('/paths/check', (req, res) => {
     const paths = Array.isArray(req.body?.paths) ? req.body.paths : [req.body?.path];
-    const out = paths.map((p) => { try { const steps = parsePath(String(p ?? '')); return { path: p, ok: true, normalized: formatPath(steps), branched: !isLinear(steps), steps }; } catch (e) { return { path: p, ok: false, error: e.message }; } });
+    const format = FORMATS.includes(req.body?.format) ? req.body.format : DEFAULT_FORMAT;
+    const out = paths.map((p) => { try { const steps = parsePath(String(p ?? '')); if (format === 'mcq' && steps.length > MAX_MCQ_STEPS) throw new Error(`a multiple-choice item takes at most ${MAX_MCQ_STEPS} steps (this path has ${steps.length}); use the short-answer format for longer paths`); return { path: p, ok: true, normalized: formatPath(steps), branched: !isLinear(steps), steps }; } catch (e) { return { path: p, ok: false, error: e.message }; } });
     res.json({ paths: out });
   });
 
@@ -101,19 +104,20 @@ export function apiRouter() {
 
   // ── builds (write) ──
   r.post('/builds', requireWriter(), wrap(async (req, res) => {
-    const { sha: shaArg, items = 5, path: pathHint = null, paths: pathList = null, deep = true, baseline = true, seed = null, allowDraft = false, model } = req.body ?? {};
+    const { sha: shaArg, items = 5, path: pathHint = null, paths: pathList = null, deep = true, baseline = true, seed = null, allowDraft = false, model, format = DEFAULT_FORMAT } = req.body ?? {};
+    if (!FORMATS.includes(format)) return res.status(400).json({ error: `format must be one of ${FORMATS.join(', ')}` });
     const sha = shaArg ? await resolveSha(String(shaArg)) : null;
     if (!sha) return res.status(400).json({ error: 'sha of an ingested source is required' });
     if (!Number.isInteger(items) || items < 1 || items > 20) return res.status(400).json({ error: 'items must be an integer between 1 and 20' });
     const composed = Array.isArray(pathList) && pathList.length ? pathList.map(String) : pathHint ? [String(pathHint)] : null;
-    for (const p of composed ?? []) { try { parsePath(p); } catch (e) { return res.status(400).json({ error: `path "${p}": ${e.message}` }); } }
+    for (const p of composed ?? []) { try { const steps = parsePath(p); if (format === 'mcq' && steps.length > MAX_MCQ_STEPS) throw new Error(`a multiple-choice item takes at most ${MAX_MCQ_STEPS} steps (this path has ${steps.length}); use the short-answer format for longer paths`); } catch (e) { return res.status(400).json({ error: `path "${p}": ${e.message}` }); } }
     const ing = await loadIngest(sha);
     if (!ing) return res.status(404).json({ error: 'not ingested' });
     if (ing.stale) return res.status(409).json({ error: 'stale digest: re-ingest first' });
     if (ing.status !== 'approved' && !allowDraft) return res.status(409).json({ error: `digest is ${ing.status}, not approved` });
     const buildId = newId('build');
-    const job = await createJob({ kind: 'build', params: { sha, items, paths: composed, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed === null || seed === '' ? null : Number(seed), allowDraft: Boolean(allowDraft), model: model || DEFAULT_MODEL, buildId }, by: req.user.email });
-    await updateBuildSummary(buildId, { id: buildId, status: 'queued', createdAt: new Date().toISOString(), model: model || DEFAULT_MODEL, source: { title: ing.meta.title, sha, claims: ing.digest.claims.length, mode: 'digest', digestReview: ing.status }, n: items, deep: Boolean(deep), pathHint: composed?.[0] ?? null, paths: composed, pathMode: composed ? 'composed' : 'planner', by: req.user.email, jobId: job.id, progress: { phase: 'queued', itemsDone: 0, of: items, at: new Date().toISOString() } });
+    const job = await createJob({ kind: 'build', params: { sha, items, paths: composed, deep: Boolean(deep), baseline: Boolean(baseline), seed: seed === null || seed === '' ? null : Number(seed), allowDraft: Boolean(allowDraft), model: model || DEFAULT_MODEL, buildId, format }, by: req.user.email });
+    await updateBuildSummary(buildId, { id: buildId, status: 'queued', createdAt: new Date().toISOString(), format, model: model || DEFAULT_MODEL, source: { title: ing.meta.title, sha, claims: ing.digest.claims.length, mode: 'digest', digestReview: ing.status }, n: items, deep: Boolean(deep), pathHint: composed?.[0] ?? null, paths: composed, pathMode: composed ? 'composed' : 'planner', by: req.user.email, jobId: job.id, progress: { phase: 'queued', itemsDone: 0, of: items, at: new Date().toISOString() } });
     const launched = await launchJob(job);
     res.status(202).json({ id: buildId, jobId: job.id, launched });
   }));

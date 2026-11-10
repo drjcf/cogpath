@@ -7,10 +7,11 @@
  * covers the source after the first step.
  */
 import { randomBytes } from 'node:crypto';
-import { getOp, ASSEMBLE, schemaOf } from './ops/index.js';
+import { getOp, assemblerFor, schemaOf, DEFAULT_FORMAT } from './ops/index.js';
 import { validate } from './schema.js';
 import { complete, part, DEFAULT_MODEL } from './llm.js';
 import { letterOptions } from './ops/assemble.js';
+import { finishShort } from './ops/assemble-short.js';
 import { formatPath, idBaseOf, depsOf, ancestorIds } from './path.js';
 import { wordCount } from './source.js';
 
@@ -109,25 +110,26 @@ export const MAX_MCQ_STEPS = 5;
  * Full run: all steps + assemble. Never throws away completed work: on failure the returned trace has
  * status 'failed', `error`, and every step that finished (the CLI saves it as a partial run).
  */
-export async function runPath({ source, path, model = DEFAULT_MODEL, effort, onEvent, seed }) {
+export async function runPath({ source, path, model = DEFAULT_MODEL, effort, onEvent, seed, format = DEFAULT_FORMAT }) {
   const id = newId();
   const t0 = Date.now();
   const trace = {
     id, status: 'running', createdAt: new Date().toISOString(),
     source: { kind: source.kind, title: source.title, path: source.path, sha: source.sha ?? null, words: wordCount(source.text), mode: source.mode ?? 'raw', digestClaims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null, focus: source.focus ?? null },
-    model, pathText: formatPath(path), path, steps: [], artifacts: {}, assemble: null, item: null, totals: null, verification: null, error: null,
+    format, model, pathText: formatPath(path), path, steps: [], artifacts: {}, assemble: null, item: null, totals: null, verification: null, error: null,
   };
   try {
-    if (path.length > MAX_MCQ_STEPS) throw new Error(`A multiple-choice item has one distractor per step, so it takes at most ${MAX_MCQ_STEPS} steps (this path has ${path.length})`);
+    const assembler = assemblerFor(format); // rejects an unknown format before any call
+    if (format === 'mcq' && path.length > MAX_MCQ_STEPS) throw new Error(`A multiple-choice item has one distractor per step, so it takes at most ${MAX_MCQ_STEPS} steps (this path has ${path.length})`);
     await runSteps({
       source, path, model, effort, onEvent, label: `${id} `,
       onStep: (rec) => { trace.artifacts[rec.id] = rec.artifact; trace.steps.push(rec); },
     });
     trace.steps.sort((x, y) => path.findIndex((s) => s.id === x.id) - path.findIndex((s) => s.id === y.id));
     const assembleStep = { id: 'assemble', op: 'assemble', index: path.length, params: {}, deps: [path[path.length - 1].id] };
-    const asm = await executeOp({ op: ASSEMBLE, source, path, step: assembleStep, artifacts: trace.artifacts, model, effort, onEvent, label: `${id} ` });
+    const asm = await executeOp({ op: assembler, source, path, step: assembleStep, artifacts: trace.artifacts, model, effort, onEvent, label: `${id} ` });
     trace.assemble = { usage: asm.usage, ms: asm.ms, problems: asm.problems, attempts: asm.attempts, instruction: asm.instruction, reasoningSummary: asm.reasoningSummary, notes: asm.notes };
-    trace.item = letterOptions(asm.artifact, seed ?? hashSeed(id));
+    trace.item = format === 'short' ? finishShort(asm.artifact) : { format: 'mcq', ...letterOptions(asm.artifact, seed ?? hashSeed(id)) };
     trace.status = 'done';
   } catch (err) {
     trace.status = 'failed';

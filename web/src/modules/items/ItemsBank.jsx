@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import PathGlyph, { StepDot } from '../../components/PathGlyph.jsx';
 import { stepTitle } from '../../lib/path.js';
+import ShortKey from '../../components/ShortKey.jsx';
 
 /** Certified items across every build, with export. Rejected and pending items can be listed too. */
 export default function ItemsBank({ onOpenBuild }) {
@@ -29,9 +30,9 @@ export default function ItemsBank({ onOpenBuild }) {
               </div>
               <p className="stem exam">{it.stem}</p>
               <p className="leadin exam">{it.leadIn}</p>
-              <ol className="options compact">
+              {it.format === 'short' ? <ShortKey item={it} path={it.path} compact /> : <ol className="options compact">
                 {it.options.map((o) => <li key={o.letter} className={o.key ? 'key' : ''}><span className="letter">{o.letter}</span><span className="exam">{o.text}</span>{o.key ? <span className="keytag">key</span> : o.failsAt ? <StepDot step={o.failsAt} path={it.path}>fails at {stepTitle(o.failsAt, it.path)}</StepDot> : null}</li>)}
-              </ol>
+              </ol>}
               <p className="muted small">{it.decision.status === 'certified' ? `Certified by ${it.decision.by}` : it.decision.status === 'rejected' ? `Rejected by ${it.decision.by}${it.decision.reason ? `: ${it.decision.reason}` : ''}` : 'Awaiting review'}{it.verification ? `. Verifier: ${it.verification.passed} of ${it.verification.applicable} checks${it.verification.necessity != null ? `, needs steps 1–${it.verification.necessity}` : ''}.` : ''}</p>
             </li>
           ))}

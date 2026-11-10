@@ -78,6 +78,15 @@ test('api: upload, ingest job, review, approve, build job, record and events', a
   assert.match(dag[0].normalized, /@a, @r2 > evaluate/);
   assert.equal(dag[1].ok, false); assert.match(dag[1].error, /2 terminal steps/);
   assert.equal((await post('/builds', { sha, items: 1, paths: ['recall(3) > nonsense'] }, as('rev@example.com'))).status, 400);
+  // the answer format: a multiple-choice item has a distractor per step, so it takes at most 5; short answer has no such limit
+  const six = 'recall(2) > analyze(causal) > analyze(contrast) > evaluate(a, b) > analyze(mechanism) > synthesize(plan)';
+  const c6 = (await post('/paths/check', { paths: [six], format: 'mcq' })).body.paths[0];
+  assert.equal(c6.ok, false); assert.match(c6.error, /at most 5 steps/);
+  assert.equal((await post('/paths/check', { paths: [six], format: 'short' })).body.paths[0].ok, true);
+  const e1 = await post('/builds', { sha, items: 1, paths: [six] }, as('rev@example.com'));
+  assert.equal(e1.status, 400); assert.match(e1.body.error, /at most 5 steps/);
+  const e2 = await post('/builds', { sha, items: 1, format: 'essay' }, as('rev@example.com'));
+  assert.equal(e2.status, 400); assert.match(e2.body.error, /format must be one of mcq, short/);
 
   const b = await post('/builds', { sha, items: 2, deep: true, baseline: true, seed: 3, paths: [ops.presets[0].path, ops.presets[2].path] }, as('rev@example.com'));
   assert.equal(b.status, 202);

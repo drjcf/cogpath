@@ -1,0 +1,230 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+process.env.MOCK_LLM = '1';
+process.env.COGPATH_DATA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../runs');
+const SAMPLE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../samples/retrobulbar-hematoma.md');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parsePath, formatPath } from '../core/path.js';
+import { toClaudeSchema, assertStrict, validate } from '../core/schema.js';
+import { OPS, ASSEMBLE_SHORT, assemblerFor, FORMATS, schemaOf } from '../core/ops/index.js';
+import { loadSource } from '../core/source.js';
+import { runPath, makeCtx, MAX_MCQ_STEPS } from '../core/executor.js';
+import { verifyItem } from '../core/verifier.js';
+import { buildShortSchema, finishShort, shortShapeProblems, allowedSources } from '../core/ops/assemble-short.js';
+import { judgeGrade, judgeElements, shortNecessitySummary, gradeSchema, elementPickSchema, gradeAnswer, pickElements, verifyShortNecessity } from '../core/verify-short.js';
+import { notesFor } from '../core/verifier.js';
+
+const WORDS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega '.repeat(12);
+const LINEAR = 'recall(3) > analyze(causal) > evaluate(a, b) > synthesize(plan)';
+const DAG5 = 'r1: recall(2) > a: analyze(causal, relations=1); r2: recall(2); @a, @r2 > evaluate(x, y, options=2) > synthesize(plan)';
+const SIX = 'recall(2) > analyze(causal) > analyze(contrast) > evaluate(a, b) > analyze(mechanism) > synthesize(plan)';
+
+const shortRun = async (text, extra = {}) => {
+  const source = await loadSource({ title: 'T', text: WORDS });
+  const path = parsePath(text);
+  return { source, path, trace: await runPath({ source, path, model: 'mock', format: 'short', ...extra }) };
+};
+
+test('formats: mcq is the default, short selects the rubric assembler, anything else is refused before any call', async () => {
+  assert.deepEqual(FORMATS, ['mcq', 'short']);
+  assert.equal(assemblerFor().id, 'assemble');
+  assert.equal(assemblerFor('short'), ASSEMBLE_SHORT);
+  assert.throws(() => assemblerFor('essay'), /Unknown format 'essay'/);
+  const source = await loadSource({ title: 'T', text: WORDS });
+  const bad = await runPath({ source, path: parsePath(LINEAR), model: 'mock', format: 'essay' });
+  assert.equal(bad.status, 'failed'); assert.match(bad.error.message, /Unknown format/); assert.equal(bad.steps.length, 0);
+  const mcq = await runPath({ source, path: parsePath(LINEAR), model: 'mock' });
+  assert.equal(mcq.item.format, 'mcq'); assert.equal(mcq.format, 'mcq'); assert.equal(mcq.item.options.length, 5);
+});
+
+test('short answer has no step limit: a six-step path runs where a multiple-choice item refuses it', async () => {
+  const source = await loadSource({ title: 'T', text: WORDS });
+  const mcq = await runPath({ source, path: parsePath(SIX), model: 'mock' });
+  assert.equal(mcq.status, 'failed'); assert.match(mcq.error.message, new RegExp(`at most ${MAX_MCQ_STEPS} steps`));
+  const { trace, path } = await shortRun(SIX);
+  assert.equal(trace.status, 'done', trace.error?.message);
+  assert.equal(trace.item.rubric.length, 6);
+  assert.deepEqual(trace.item.rubric.map((e) => e.nodeId), path.map((s) => s.id));
+});
+
+test('the short item: one rubric element per node in path order, ids e1.., no options or key, points add up', async () => {
+  const { trace, path } = await shortRun(DAG5);
+  assert.equal(trace.status, 'done', trace.error?.message);
+  const it = trace.item;
+  assert.equal(it.format, 'short'); assert.equal(it.key, null); assert.equal(it.options, undefined);
+  assert.deepEqual(it.rubric.map((e) => e.id), ['e1', 'e2', 'e3', 'e4', 'e5']);
+  assert.deepEqual(it.rubric.map((e) => e.nodeId), path.map((s) => s.id));
+  assert.equal(it.maxPoints, 5);
+  assert.ok(it.modelAnswer.length > 20);
+  assert.equal(trace.assemble.problems.length, 0);
+  assert.equal(trace.steps.at(-1).id, 'synthesize');
+  assert.match(trace.steps.at(-1).deps.join(), /evaluate/);
+});
+
+test('schemas for the assembler, the grader and the element picker are accepted by the Claude form', async () => {
+  const { path, trace } = await shortRun(LINEAR);
+  const banned = ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength', 'maxLength', 'maxItems', 'allOf', 'oneOf', '$ref', 'not'];
+  const scan = (node, where) => {
+    if (Array.isArray(node)) return node.forEach((n, i) => scan(n, `${where}[${i}]`));
+    if (node == null || typeof node !== 'object') return;
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'properties') { for (const [pk, pv] of Object.entries(v)) scan(pv, `${where}.${pk}`); continue; }
+      assert.ok(!banned.includes(k), `${where}: '${k}' would be rejected`);
+      if (k === 'minItems') assert.ok(v <= 1, `${where}: minItems ${v}`);
+      scan(v, `${where}.${k}`);
+    }
+  };
+  for (const [name, schema] of [['assemble_short', buildShortSchema(path)], ['grade', gradeSchema(trace.item)], ['element_pick', elementPickSchema(trace.item)]]) {
+    const claude = toClaudeSchema(assertStrict(schema));
+    scan(claude, name); assertStrict(claude);
+  }
+  assert.equal(validate(buildShortSchema(path), OPS.recall && ASSEMBLE_SHORT.mock(makeCtx({ source: await loadSource({ title: 'T', text: WORDS }), path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts }))).ok, true);
+});
+
+test('assembler checks: wrong node order, a derivedFrom outside the node, a stem that leaks a recalled fact, a long model answer, a missing question', async () => {
+  const { trace, path, source } = await shortRun(LINEAR);
+  const ctx = makeCtx({ source, path, step: { id: 'assemble', op: 'assemble' }, artifacts: trace.artifacts });
+  const good = ASSEMBLE_SHORT.mock(ctx);
+  assert.deepEqual(ASSEMBLE_SHORT.verify(good, ctx), []);
+  const swapped = { ...good, rubric: [good.rubric[1], good.rubric[0], ...good.rubric.slice(2)] };
+  assert.ok(ASSEMBLE_SHORT.verify(swapped, ctx).some((p) => /one element per node, in path order/.test(p)));
+  const wrong = { ...good, rubric: good.rubric.map((e, i) => (i === 1 ? { ...e, derivedFrom: 'c1' } : e)) };
+  assert.ok(ASSEMBLE_SHORT.verify(wrong, ctx).some((p) => /element for "analyze" has derivedFrom="c1", allowed: r1/.test(p)));
+  const fact = trace.artifacts.recall.concepts[0];
+  const leaky = { ...good, stem: `${good.stem} ${fact.statement}` };
+  assert.ok(ASSEMBLE_SHORT.verify(leaky, ctx).some((p) => /stem restates recalled fact c1/.test(p)));
+  assert.ok(ASSEMBLE_SHORT.verify({ ...good, modelAnswer: 'word '.repeat(200) }, ctx).some((p) => /model answer is 200 words/.test(p)));
+  assert.ok(ASSEMBLE_SHORT.verify({ ...good, leadIn: 'What would you do? Why?' }, ctx).some((p) => /exactly one question/.test(p)), 'two questions');
+  assert.ok(!ASSEMBLE_SHORT.verify({ ...good, leadIn: 'What would you do for this patient, and why?' }, ctx).some((p) => /exactly one question/.test(p)), 'one question asking for the decision and the reasoning is the intended form');
+  assert.ok(shortShapeProblems({ ...good, leadIn: 'Describe the plan.' }).some((p) => /exactly one question/.test(p)));
+  assert.ok(shortShapeProblems({ ...good, modelAnswer: `${good.modelAnswer} The article says so.` }).some((p) => /refers to the source/.test(p)));
+  assert.ok(ASSEMBLE_SHORT.verify({ ...good, rubric: good.rubric.map((e) => ({ ...e, requirement: good.rubric[0].requirement })) }, ctx).some((p) => /same requirement/.test(p)));
+  // terminal element is derived from 'terminal'; allowed sources per node
+  assert.ok(allowedSources(path, trace.artifacts, path.at(-1)).has('terminal'));
+  const fromRecall = allowedSources(path, trace.artifacts, path[0]);
+  for (const c of trace.artifacts.recall.concepts) assert.ok(fromRecall.has(c.id), c.id);
+  assert.ok(fromRecall.has('alt:recall'), 'a synthesize alternative for the node is an allowed source too');
+  assert.ok(!fromRecall.has('terminal'));
+});
+
+test('grading: a credit stands only with a quote that is in the answer', () => {
+  const item = { rubric: [{ id: 'e1', nodeId: 'recall' }, { id: 'e2', nodeId: 'analyze' }, { id: 'e3', nodeId: 'synthesize' }] };
+  const answer = 'Release the lateral canthus now because pressure on the optic nerve is time critical, then reassess vision.';
+  const g = judgeGrade({ marks: [
+    { elementId: 'e1', met: true, evidence: 'Release the lateral canthus now' },
+    { elementId: 'e2', met: true, evidence: 'it is a compartment syndrome of the orbit' }, // not in the answer
+    { elementId: 'e3', met: false, evidence: '' },
+  ] }, item, answer);
+  assert.deepEqual(g.marks.map((m) => m.met), [true, false, false]);
+  assert.match(g.marks[1].override, /without a quote from the answer/);
+  assert.equal(g.score, 1); assert.equal(g.max, 3);
+  assert.equal(judgeGrade({ marks: [] }, item, answer).score, 0, 'an element the grader never marked is not credited');
+});
+
+test('element entailment is judged with the MCQ discipline: raw yes without notes, quotes or support is overridden', async () => {
+  const { trace, path } = await shortRun(LINEAR);
+  const item = trace.item;
+  const notes = notesFor(trace.artifacts, path.slice(0, 1));
+  const q = notes.textOf('c1').replace(/[{}\[\]"]/g, ' ').trim().split(/\s+/).slice(0, 8).join(' ');
+  const ok = { elementId: 'e1', fullyEntailed: true, citedNotes: ['c1'], evidence: [{ clause: q, noteId: 'c1', quote: q }], missingClause: '' };
+  const judged = (e) => judgeElements({ elements: [e] }, item, notes).find((x) => x.elementId === 'e1');
+  assert.equal(judged(ok).entailed, true);
+  assert.match(judged({ ...ok, citedNotes: [] }).override, /no notes cited/);
+  assert.match(judged({ ...ok, citedNotes: ['zz9'] }).override, /do not exist/);
+  assert.match(judged({ ...ok, evidence: [] }).override, /no quoted evidence for the element/);
+  assert.match(judged({ ...ok, evidence: [{ clause: q, noteId: 'c1', quote: 'a sentence that no note contains at all' }] }).override, /not found in any note/);
+  assert.equal(judged({ ...ok, fullyEntailed: false }).entailed, false);
+  assert.equal(judged({ ...ok, fullyEntailed: false }).raw, false);
+  // elements the picker did not answer are simply not established
+  assert.equal(judgeElements({ elements: [] }, item, notes).every((e) => !e.entailed), true);
+});
+
+test('necessity summary: the full path must establish every element, and withholding a node must not establish its element or the final one', async () => {
+  const { trace, path } = await shortRun(LINEAR);
+  const rubric = trace.item.rubric; // e1 recall, e2 analyze, e3 evaluate, e4 synthesize
+  const mk = (without, entailed) => ({ without, entailed, k: 0 });
+  const good = [mk('recall', []), mk('analyze', ['e1']), mk('evaluate', ['e1', 'e2']), mk('synthesize', ['e1', 'e2', 'e3']), mk(null, ['e1', 'e2', 'e3', 'e4'])];
+  assert.equal(shortNecessitySummary({ picks: good, rubric, path }).pass, true);
+  const leaky = good.map((p) => (p.without === 'analyze' ? mk('analyze', ['e1', 'e2']) : p));
+  const l = shortNecessitySummary({ picks: leaky, rubric, path });
+  assert.equal(l.pass, false); assert.deepEqual(l.leaked, [{ without: 'analyze', elements: ['e2'] }]); assert.match(l.verdict, /e2 still established without analyze/);
+  const finalLeak = good.map((p) => (p.without === 'recall' ? mk('recall', ['e4']) : p));
+  assert.deepEqual(shortNecessitySummary({ picks: finalLeak, rubric, path }).leaked, [{ without: 'recall', elements: ['e4'] }]);
+  const thin = good.map((p) => (p.without === null ? mk(null, ['e1', 'e2', 'e3']) : p));
+  const t = shortNecessitySummary({ picks: thin, rubric, path });
+  assert.equal(t.pass, false); assert.deepEqual(t.unsupported, ['e4']); assert.match(t.verdict, /does not establish element e4/);
+});
+
+test('verification of a short item in mock mode, on a chain and on a branched path, with deep checks', async () => {
+  for (const text of [LINEAR, DAG5]) {
+    const { trace, source } = await shortRun(text);
+    const v = await verifyItem({ trace, source, model: 'mock', deep: true });
+    assert.equal(v.format, 'short');
+    assert.equal(v.summary.pass, true, JSON.stringify(v.summary));
+    assert.equal(v.answerability.score, v.answerability.max);
+    assert.equal(v.modelAnswerScore.pass, true);
+    assert.equal(v.pathNecessity.picks.length, trace.path.length + 1);
+    assert.equal(v.elementMapping.total, trace.path.length);
+    assert.equal(v.elementMapping.terminalBlocked, trace.path.length);
+    // the path needed to establish each element: withholding a node leaves nothing established in the mock
+    for (const p of v.pathNecessity.picks.filter((x) => x.without)) assert.deepEqual(p.entailed, []);
+    const full = v.pathNecessity.picks.find((p) => p.without == null);
+    assert.deepEqual(full.entailed, trace.item.rubric.map((e) => e.id));
+    // every pick keeps what a re-judge needs
+    assert.ok(full.elements.every((e) => 'raw' in e && 'citedNotes' in e && 'evidence' in e));
+  }
+});
+
+test('a full short-answer build with controls: planned, verified deeply, summarized, exported, rescored', async () => {
+  const fs = await import('node:fs');
+  const { ingestSource } = await import('../core/ingest.js');
+  const { saveIngest, loadIngest, approveIngest, exportItem } = await import('../core/store.js');
+  const { withDigest } = await import('../core/source.js');
+  const { buildItems, summarize } = await import('../core/build.js');
+  const { rescoreBuild } = await import('../core/rescore.js');
+  const raw = await loadSource(SAMPLE);
+  const result = await ingestSource(raw, { maxClaims: 16 });
+  const { dir } = await saveIngest({ source: raw, result, model: 'mock' });
+  try {
+    await approveIngest(raw.sha, { by: 'tester', certifyPending: true });
+    const ing = await loadIngest(raw.sha);
+    const src = { ...withDigest(raw, ing.digest, 'digest'), digestReview: ing.status };
+    const build = await buildItems({ source: src, n: 2, paths: [DAG5, SIX], model: 'mock', deep: true, baseline: true, seed: 3, format: 'short' });
+    assert.equal(build.format, 'short');
+    assert.equal(build.status, 'done', build.error?.message);
+    assert.equal(build.items.length, 2);
+    for (const it of build.items) { assert.equal(it.status, 'done', it.error?.message); assert.equal(it.verification.format, 'short'); assert.equal(it.verification.summary.pass, true); }
+    assert.equal(build.baselines.length, 2);
+    for (const b of build.baselines) {
+      assert.equal(b.trace.item.format, 'short'); assert.equal(b.status, 'done');
+      assert.ok(b.trace.item.rubric.length >= 3);
+      assert.equal(b.verification.format, 'short'); assert.equal(b.verification.summary.pass, true);
+      assert.equal(b.verification.pathNecessity, null);
+    }
+    const s = summarize(build);
+    assert.equal(s.rates.necessity, '2/2'); assert.equal(s.rows[0].cover, 'pass'); assert.equal(s.rows[0].mapping, '5/5'); assert.equal(s.rows[1].mapping, '6/6');
+    assert.equal(s.rates.baselineCover, '2/2'); assert.equal(s.rates.baselineForm, '2/2');
+    const out = exportItem(build, build.items[0], { status: 'certified' });
+    assert.equal(out.format, 'short'); assert.equal(out.options, null); assert.equal(out.key, null);
+    assert.equal(out.rubric.length, 5); assert.deepEqual(out.rubric.map((e) => e.node), ['r1', 'a', 'r2', 'evaluate', 'synthesize']);
+    assert.equal(out.maxPoints, 5); assert.equal(out.verification.cover, true); assert.equal(out.verification.keyBlocked, '5/5');
+    assert.equal(out.control.cover, true);
+    // an MCQ export is unchanged in shape
+    const mcq = await buildItems({ source: src, n: 1, paths: [LINEAR], model: 'mock', deep: false, baseline: false, seed: 3 });
+    const m = exportItem(mcq, mcq.items[0], { status: 'certified' });
+    assert.equal(m.format, 'mcq'); assert.equal(m.options.length, 5); assert.ok(m.key);
+    // rescoring re-judges the stored element picks and reaches the same verdicts
+    const before = JSON.stringify(build.items.map((it) => it.verification.summary));
+    await rescoreBuild(build);
+    assert.equal(JSON.stringify(build.items.map((it) => it.verification.summary)), before);
+    // a stored pick whose evidence no longer holds is overturned by the re-judge
+    const full = build.items[0].verification.pathNecessity.picks.find((p) => p.without == null);
+    full.elements[0].evidence = [{ clause: 'x', noteId: full.elements[0].citedNotes[0], quote: 'a sentence that no note contains at all' }];
+    const r = await rescoreBuild(build);
+    assert.ok(r.changes.some((c) => /necessity all/.test(c.what)));
+    assert.equal(build.items[0].verification.pathNecessity.pass, false);
+    assert.match(build.items[0].verification.pathNecessity.verdict, /does not establish element e1/);
+    assert.equal(build.items[0].verification.summary.pass, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

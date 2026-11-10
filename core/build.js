@@ -9,6 +9,7 @@ import { withFocus } from './source.js';
 import { runPath, newId, sumUsage } from './executor.js';
 import { verifyItem } from './verifier.js';
 import { runBaseline, verifyBaseline } from './baseline.js';
+import { assemblerFor, DEFAULT_FORMAT } from './ops/index.js';
 
 /** Which claims each item's recall concepts cite, and which digest claims no item used. */
 export function coverageMap(digest, items) {
@@ -26,11 +27,12 @@ export function coverageMap(digest, items) {
   return { perItem: Object.fromEntries(used), unused: [...all].filter((id) => !touched.has(id)), usedCount: touched.size, total: all.size, byType };
 }
 
-export async function buildItems({ source, n, paths, pathHint, model, deep = false, baseline = false, seed, id: givenId, onEvent }) {
+export async function buildItems({ source, n, paths, pathHint, model, deep = false, baseline = false, seed, id: givenId, onEvent, format = DEFAULT_FORMAT }) {
+  assemblerFor(format); // an unknown format is refused before anything is planned
   const id = givenId ?? newId('build');
   const t0 = Date.now();
   if (!paths?.length && pathHint) paths = [pathHint];
-  const build = { id, status: 'running', createdAt: new Date().toISOString(), model, source: { title: source.title, sha: source.sha ?? null, mode: source.mode, claims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null }, n, pathHint: paths?.[0] ?? null, paths: paths ?? null, pathMode: paths?.length ? 'composed' : 'planner', deep, plan: null, items: [], baselines: [], coverage: null, totals: null, error: null };
+  const build = { id, status: 'running', createdAt: new Date().toISOString(), format, model, source: { title: source.title, sha: source.sha ?? null, mode: source.mode, claims: source.digest?.claims?.length ?? 0, digestReview: source.digestReview ?? null }, n, pathHint: paths?.[0] ?? null, paths: paths ?? null, pathMode: paths?.length ? 'composed' : 'planner', deep, plan: null, items: [], baselines: [], coverage: null, totals: null, error: null };
   try {
     onEvent?.({ type: 'plan:start', n });
     const plan = await planItems({ source, n, paths, model });
@@ -42,7 +44,7 @@ export async function buildItems({ source, n, paths, pathHint, model, deep = fal
       const focused = withFocus(source, p, { usedConstraints });
       const itemSeed = (seed ?? 1) + i;
       onEvent?.({ type: 'item:start', plan: p, index: i });
-      const trace = await runPath({ source: focused, path: p.steps, model, onEvent, seed: itemSeed });
+      const trace = await runPath({ source: focused, path: p.steps, model, onEvent, seed: itemSeed, format });
       const cc = trace.path.map((st) => trace.artifacts[st.id]?.caseConstraint).filter(Boolean).pop();
       if (cc) usedConstraints.push({ item: p.id, feature: cc.feature });
       const rec = { plan: { id: p.id, focus: p.focus, path: p.pathText, claims: p.claims }, traceId: trace.id, status: trace.status, trace, verification: null, error: trace.error };
@@ -56,7 +58,7 @@ export async function buildItems({ source, n, paths, pathHint, model, deep = fal
       if (baseline) {
         onEvent?.({ type: 'baseline:start', plan: p });
         try {
-          const b = await runBaseline({ source: focused, focus: p.focus, model, seed: itemSeed, label: `baseline:${p.id}` });
+          const b = await runBaseline({ source: focused, focus: p.focus, model, seed: itemSeed, label: `baseline:${p.id}`, format });
           b.verification = await verifyBaseline({ trace: b, source: focused, model });
           build.baselines.push({ plan: { id: p.id, focus: p.focus }, traceId: b.id, status: 'done', trace: b, verification: b.verification, error: null });
           onEvent?.({ type: 'baseline:done', plan: p, trace: b, verification: b.verification });
@@ -94,13 +96,13 @@ export function summarize(build) {
     const bv = b?.verification;
     return {
       id: it.plan.id, focus: it.plan.focus, path: it.plan.path, status: it.status,
-      necessity: v ? (v.pathNecessity.pass ? 'pass' : `k${v.pathNecessity.determinedAt ?? '?'}/${v.pathNecessity.pathLength}`) : '',
+      necessity: v ? (v.pathNecessity.pass ? 'pass' : v.format === 'short' ? 'FAIL' : `k${v.pathNecessity.determinedAt ?? '?'}/${v.pathNecessity.pathLength}`) : '',
       sourceRecall: v ? (v.sourceRecall.skipped ? 'n/a' : v.sourceRecall.pass ? 'pass' : 'FAIL') : '',
       digestRecall: v ? (!v.digestRecall || v.digestRecall.skipped ? 'n/a' : v.digestRecall.pass ? 'pass' : 'FAIL') : '',
-      mapping: v?.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : '',
-      cover: v ? (v.coverTheOptions.pass ? 'pass' : 'FAIL') : '',
+      mapping: v?.distractorMapping ? `${v.distractorMapping.keyBlocked}/${v.distractorMapping.total}` : v?.elementMapping ? `${v.elementMapping.terminalBlocked}/${v.elementMapping.total}` : '',
+      cover: v ? ((v.coverTheOptions ?? v.answerability).pass ? 'pass' : 'FAIL') : '',
       pass: v ? `${v.summary.passed}/${v.summary.applicable}` : '',
-      baseline: bv ? { sourceRecall: bv.sourceRecall.skipped ? 'n/a' : bv.sourceRecall.pass ? 'pass' : 'FAIL', digestRecall: !bv.digestRecall || bv.digestRecall.skipped ? 'n/a' : bv.digestRecall.pass ? 'pass' : 'FAIL', cover: bv.coverTheOptions.pass ? 'pass' : 'FAIL', form: bv.form.pass ? 'pass' : 'FAIL', grounding: bv.grounding.skipped ? 'n/a' : `${bv.grounding.found}/${bv.grounding.checked}`, pass: `${bv.summary.passed}/${bv.summary.applicable}` } : (b ? { error: b.error?.message } : null),
+      baseline: bv ? { sourceRecall: bv.sourceRecall.skipped ? 'n/a' : bv.sourceRecall.pass ? 'pass' : 'FAIL', digestRecall: !bv.digestRecall || bv.digestRecall.skipped ? 'n/a' : bv.digestRecall.pass ? 'pass' : 'FAIL', cover: (bv.coverTheOptions ?? bv.answerability).pass ? 'pass' : 'FAIL', form: bv.form.pass ? 'pass' : 'FAIL', grounding: bv.grounding.skipped ? 'n/a' : `${bv.grounding.found}/${bv.grounding.checked}`, pass: `${bv.summary.passed}/${bv.summary.applicable}` } : (b ? { error: b.error?.message } : null),
       tokens: it.trace?.totals ? { in: it.trace.totals.input_tokens, out: it.trace.totals.output_tokens } : null,
     };
   });
